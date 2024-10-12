@@ -1,0 +1,13 @@
+{
+  "name": "lumix-remote",
+  "version": "1.0.0",
+  "main": "lumix.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "axelw3",
+  "description": "",
+  "dependencies": {
+    "ws": "^7.5.10"
+  }
+}
