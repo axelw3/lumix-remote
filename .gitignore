@@ -1,0 +1,16 @@
+node_modules/
+*.jpg
+*.txt
+*.ods
+*.png
+2/
+3/
+remote.html
+remote2.html
+remote3.html
+test.html
+soap.js
+stream.js
+calc_exposure.js
+exposure.js
+getexposure.js
