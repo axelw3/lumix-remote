@@ -3,6 +3,7 @@ const readline = require("node:readline");
 const http = require("node:http");
 const ws = require("ws");
 const fs = require("node:fs");
+const XML = require("./xml.js");
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -22,18 +23,23 @@ class LUMIX{
 	static ISOS = [0, 80, 100, 125, 200, 400, 800, 1600, 3200, 6400, 12800, 25600];
 	static CAMERA_SHTR = [0, 2816, 2731, 2646, 2560, 2475, 2390, 2304, 2219, 2134, 2048, 1963, 1878, 1792, 1707, 1622, 1536, 1451, 1366, 1280, 1195, 1110, 1024, 939, 854, 768, 683, 598, 512, 427, 342, 256, 171, 86, 0, 65451, 65366, 65280, 65195, 65110, 65024, 64939, 64854, 64768, 64683, 64598, 64512, 64427, 64342, 64256, 64171, 64086, 64000, 16384]; // 16384 = T
 	static CAMERA_APERTURE = [0, 768, 854, 938, 1024, 1110, 1195, 1280, 1366, 1451, 1536];
+
 	constructor(ip){
-		this.a = ip;
+		this.addr = ip;
 		this.connected = false;
 		this.ready = false;
-		this.timelapse_interval;
-		this.status_interval;
+		this.timelapse = {
+			running: false,
+			interval_id: null,
+			total: 0,
+			interval: 0,
+			remaining: 0
+		};
 		this.websocket;
 		this.SOAP = false;
 		this.state = {
 			timed_shutter: false,
 			timed_shutter_t: 5,
-			timelapse_running: false,
 			photo_mode: 0,
 			shtr: 9,
 			aperture: 1,
@@ -49,25 +55,24 @@ class LUMIX{
 		};
 		this.last_pic = [119, 562];
 		this.last_pic_data = {
-			id: "0-0",
-			data:""
+			id: [0, 0],
+			data: null
 		};
-		this.timelapse_data = null;
 	}
 
 	connect(){
 		return new Promise((resolve, reject) => {
 			if(!this.connected){
-				logMsg("CAM_CONNECTING", this.a);
-				this.sendCommand("mode=camcmd&value=playmode").then(()=>{
-					this.sendCommand("mode=get_content_info").then(res => {
+				logMsg("CAM_CONNECTING", this.addr);
+				this.sendCommand({ mode: "camcmd", value: "playmode" }).then(()=>{
+					this.sendCommand({ mode: "get_content_info" }).then(res => {
 						let num = parseInt(XML.getXMLValue(res, "content_number"));
 						this.init(num || 1).then(img_num => {
 							if(!!img_num && img_num.length == 2){
 								this.last_pic = img_num;
 							}
 							this.connected = true;
-							this.sendCommand("mode=getsetting&type=shtrspeed").then(shtr_speed => {
+							this.sendCommand({ mode: "getsetting", type: "shtrspeed" }).then(shtr_speed => {
 								let shutter = parseInt(shtr_speed.split("shtrspeed=\"")[1].split("/")[0]);
 								let sp_id = LUMIX.CAMERA_SHTR.reduce(function(pr, cu, i){
 									let prev = LUMIX.CAMERA_SHTR[pr];
@@ -87,10 +92,10 @@ class LUMIX{
 									logMsg("CAM_GETSETTING_ERROR", "Kunde inte läsa slutartiden från kameran.");
 								}
 							}, () => logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta slutartiden från kameran."));
-							this.sendCommand("mode=getsetting&type=iso").then(iso_val => {
+							this.sendCommand({ mode: "getsetting", "type": "iso" }).then(iso_val => {
 								let iso_int = parseInt(iso_val.split("iso=\"")[1].split("\"")[0]);
 								let iso_id = LUMIX.ISOS.indexOf(iso_int);
-								if(!isNaN(iso_id) && iso_id >= 1 && iso_id < this.constants.isos.length){
+								if(!isNaN(iso_id) && iso_id >= 1 && iso_id < LUMIX.ISOS.length){
 									this.state.iso = iso_id;
 									logMsg("CAM_GETSETTING_DONE", "ISO från kameran: " + iso_int);
 								} else {
@@ -98,7 +103,7 @@ class LUMIX{
 								}
 							}, () => logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta ISO från kameran."));
 							// Aperture
-							this.sendCommand("mode=getsetting&type=focal").then(aperture => {
+							this.sendCommand({ mode: "getsetting", type: "focal" }).then(aperture => {
 								let aperture2 = parseInt(aperture.split("focal=\"")[1].split("/")[0]);
 								let aperture_id = LUMIX.CAMERA_APERTURE.reduce((pr, cu, i) => {
 									let prev=LUMIX.CAMERA_APERTURE[pr];
@@ -131,7 +136,7 @@ class LUMIX{
 		// Starta SOAP
 		return new Promise((resolve,reject)=>{
 			let request = http.request({
-				host: this.a,
+				host: this.addr,
 				port: 60606,
 				path: "/Server0/CDS_control",
 				method: "POST",
@@ -165,9 +170,9 @@ class LUMIX{
 	// Viktiga funktioner med kameran
 	setMode(newmode){
 		if(newmode == "rec"){
-			return this.sendCommand("mode=camcmd&value=recmode");
+			return this.sendCommand({ mode: "camcmd", value: "recmode" });
 		} else if(newmode == "play"){
-			return this.sendCommand("mode=camcmd&value=playmode");
+			return this.sendCommand({ mode: "camcmd", value: "playmode" });
 		} else {
 			return new Promise((resolve, reject)=>{
 				reject("Okänt läge (\"" + newmode + "\")");
@@ -180,7 +185,7 @@ class LUMIX{
 			if(!this.state.timed_shutter){
 				if(this.state.auto_exp.enabled == true){
 					this.autoAdjustExp().then(() => {
-						this.sendCommand("mode=camcmd&value=capture").then(() => {
+						this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
 							setTimeout(() => {
 								this.pictureTaken();
 							}, LUMIX.SHTR_SPEEDS[this.state.shtr] * 1000);
@@ -188,23 +193,23 @@ class LUMIX{
 						this.websocket.send("syncstate_" + JSON.stringify(camera.state));
 					}, err => {
 						logMsg("AUTO_EXP_ERROR", "Kunde inte justera exponeringen. Fel: " + err);
-						this.sendCommand("mode=camcmd&value=capture").then(() => {
+						this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
 							setTimeout(() => {
 								this.pictureTaken();
 							}, LUMIX.SHTR_SPEEDS[this.state.shtr] * 1000);
 						}, reject);
 					});
 				} else {
-					this.sendCommand("mode=camcmd&value=capture").then(() => {
+					this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
 						setTimeout(() => {
 							this.pictureTaken();
 						}, LUMIX.SHTR_SPEEDS[this.state.shtr] * 1000);
 					}, reject);
 				}
 			} else {
-				this.sendCommand("mode=camcmd&value=capture").then(() => {
+				this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
 					setTimeout(() => {
-						this.sendCommand("mode=camcmd&value=capture_cancel").then(resolve, reject);
+						this.sendCommand({ mode: "camcmd", value: "capture_cancel" }).then(resolve, reject);
 						this.pictureTaken();
 					}, this.state.timed_shutter_t * 1000);
 				}, reject);
@@ -213,29 +218,27 @@ class LUMIX{
 	}
 
 	cancelCapture(){
-		return this.sendCommand("mode=camctrl&type=capture_cancel");
+		return this.sendCommand({ mode: "camctrl", type: "capture_cancel" });
 	}
 
 	setShutter(speed_id){
 		return new Promise((resolve, reject)=>{
 			if(speed_id !== this.state.shtr){
-				let cmd;
+				let cmd = { mode: "setsetting", type: "shtrspeed", value: "16384/256" };
 				if(speed_id <= 52){
 					this.state.shtr = speed_id;
 					let val=Math.round(2816 - 85.30232558139535 * (speed_id - 1));
-					cmd = "mode=setsetting&type=shtrspeed&value=" + val + "/256";
-				} else {
-					cmd = "mode=setsetting&type=shtrspeed&value=16384/256";
+					cmd = { mode: "setsetting", type: "shtrspeed", value: val + "/256" };
 				}
 				this.sendCommand(cmd).then(res => {
-					logMsg("SET_SHUTTER_DONE", "Ställde in slutartiden till: " + this.constants.shtr_speeds_str[speed_id] + " s");
+					logMsg("SET_SHUTTER_DONE", "Ställde in slutartiden till: " + LUMIX.SHTR_SPEEDS_STR[speed_id] + " s");
 					resolve(res);
 				}, err => {
 					logMsg("SET_SHUTTER_ERROR", "Kunde inte ställa in slutartiden: " + err);
 					reject(err);
 				});
 			}else{
-				logMsg("SET_SHUTTER_NC", "Slutartiden är redan " + this.constants.shtr_speeds_str[speed_id] + " s.");
+				logMsg("SET_SHUTTER_NC", "Slutartiden är redan " + LUMIX.SHTR_SPEEDS_STR[speed_id] + " s.");
 				resolve("Slutartiden ändrades inte.");
 			}
 		});
@@ -246,7 +249,7 @@ class LUMIX{
 			let new_iso_id = LUMIX.ISOS.indexOf(parseInt(iso));
 			if(this.state.iso !== new_iso_id){
 				this.state.iso = new_iso_id;
-				this.sendCommand("mode=setsetting&type=iso&value=" + iso).then(res => {
+				this.sendCommand({ mode: "setsetting", type: "iso", value: iso }).then(res => {
 					logMsg("SET_ISO_DONE", "Ställde in ISO till: " + iso);
 					resolve(res);
 				}, err => {
@@ -262,22 +265,22 @@ class LUMIX{
 
 	setWB(wb){
 		this.state.wb = parseInt(wb);
-		return this.sendCommand("mode=setsetting&type=whitebalance&value=color_temp&value2=" + wb);
+		return this.sendCommand({ mode: "setsetting", type: "whitebalance", value: "color_temp", value2: wb });
 	}
 
 	setAperture(aperture_id){
 		return new Promise((resolve,reject) => {
 			if(this.state.aperture !== aperture_id){
 				this.state.aperture = aperture_id;
-				this.sendCommand("mode=setsetting&type=focal&value=" + Math.round(768 + 85.30232558139535 *(parseInt(aperture_id) - 1)) + "/256").then(res => {
-					logMsg("SET_APERTURE_DONE", "Ställde in aperture till: f/" + this.constants.apertures[aperture_id]);
+				this.sendCommand({ mode: "setsetting", type: "focal", value: Math.round(768 + 85.30232558139535 *(parseInt(aperture_id) - 1)) + "/256" }).then(res => {
+					logMsg("SET_APERTURE_DONE", "Ställde in aperture till: f/" + LUMIX.APERTURES[aperture_id]);
 					resolve(res);
 				}, err => {
 					logMsg("SET_APERTURE_ERROR", "Kunde inte ställa in aperture: " + err);
 					reject(err);
 				});
 			}else{
-				logMsg("SET_APERTURE_NC", "Aperture är redan f/" + this.constants.apertures[aperture_id] + ".");
+				logMsg("SET_APERTURE_NC", "Aperture är redan f/" + LUMIX.APERTURES[aperture_id] + ".");
 				resolve("Aperture ändrades inte.");
 			}
 		});
@@ -285,7 +288,7 @@ class LUMIX{
 
 	setFocus(percent, iter){
 		return new Promise((resolve, reject) => {
-			this.sendCommand("mode=camctrl&type=focus&value=tele-normal").then(res => {
+			this.sendCommand({ mode: "camctrl", type: "focus", value: "tele-normal" }).then(res => {
 				let res_parsed = res.split(",");
 				if(res_parsed[0] == "ok"){
 					let goal_focus = parseInt(res_parsed[2]) * (percent/100);
@@ -293,7 +296,7 @@ class LUMIX{
 					let tryFocus = (curr, goal, i) => {
 						let speed=Math.abs(curr - goal) > 35 ? "fast" : "normal";
 						if(curr > goal){
-							this.sendCommand("mode=camctrl&type=focus&value=tele-" + speed).then(res => {
+							this.sendCommand({ mode: "camctrl", type: "focus", value: "tele-" + speed }).then(res => {
 								let parsed = res.split(",");
 								if(parsed[0] == "ok"){
 									let res_focus = parseInt(parsed[1]);
@@ -310,7 +313,7 @@ class LUMIX{
 								}
 							}, reject);
 						} else {
-							this.sendCommand("mode=camctrl&type=focus&value=wide-" + speed).then(res => {
+							this.sendCommand({ mode: "camctrl", type: "focus", value: "wide-" + speed }).then(res => {
 								let parsed=res.split(",");
 								if(parsed[0] == "ok"){
 									let res_focus = parseInt(parsed[1]);
@@ -336,11 +339,11 @@ class LUMIX{
 	}
 
 	focusNear(){
-		return this.sendCommand("mode=camctrl&type=focus&value=wide-normal");
+		return this.sendCommand({ mode: "camctrl", type: "focus", value: "wide-normal" });
 	}
 
 	focusFar(){
-		return this.sendCommand("mode=camctrl&type=focus&value=tele-normal");
+		return this.sendCommand({ mode: "camctrl", type: "focus", value: "tele-normal" });
 	}
 
 	selectMode(mode){
@@ -365,10 +368,10 @@ class LUMIX{
 	setDriveMode(mode){
 		if(mode == 0){
 			//logMsg("CAM_SET_DRIVEMODE", "Använder normalt läge.");
-			return this.sendCommand("mode=setsetting&type=drivemode&value=normal");
+			return this.sendCommand({ mode: "setsetting", type: "drivemode", value: "normal" });
 		} else if(mode == 1){
 			//logMsg("CAM_SET_DRIVEMODE", "Använder burst-läge.");
-			return this.sendCommand("mode=setsetting&type=drivemode&value=burst");
+			return this.sendCommand({ mode: "setsetting", type: "drivemode", value: "burst" });
 		} else {
 			return new Promise((res,rej) => rej());
 		}
@@ -386,31 +389,34 @@ class LUMIX{
 
 	// Timer-relaterade funktioner
 	startTimelapse(interval, pictures){
+		if(this.timelapse.running){
+			logMsg("TIMELAPSE_ERROR", "Kunde inte påbörja timelapse (körs redan).");
+			return;
+		}
+
 		if(!isNaN(interval) && !isNaN(pictures)){
 			// interval in seconds
-			this.timelapse_data = {
-				total_pics: parseInt(pictures),
-				interval: parseInt(interval),
-				remaining: parseInt(pictures)
-			};
-			this.state.timelapse_running = true;
+			this.timelapse.interval = parseInt(interval);
+			this.timelapse.total = parseInt(pictures);
+			this.timelapse.remaining = parseInt(pictures);
+			this.timelapse.running = true;
+
 			logMsg("TIMELAPSE", "Startar timelapse (" + pictures + " x " + interval + "s)...");
 			this.websocket.send("tlsync_" + interval + "&" + pictures + "&begin");
-			this.timelapse_interval=setInterval(() => {
-				this.timelapse_data.remaining--;
+			this.timelapse.interval_id = setInterval(() => {
+				this.timelapse.remaining--;
 				this.capture();
-				this.websocket.send("tlsync_" + interval + "&" + pictures + "&" + this.timelapse_data.remaining);
+				this.websocket.send("tlsync_" + interval + "&" + pictures + "&" + this.timelapse.remaining);
 				
-				let remaining = Math.ceil(interval * this.timelapse_data.remaining / 60);
-				logMsg("TIMELAPSE", "Tar foto " + (this.timelapse_data.total_pics - this.timelapse_data.remaining).toString(10) + "/" + pictures + "... (" + remaining + " minut" + ((remaining == 1) ? "" : "er") + " återstår)");
+				let remaining = Math.ceil(interval * this.timelapse.remaining / 60);
+				logMsg("TIMELAPSE", "Tar foto " + (this.timelapse.total - this.timelapse.remaining).toString(10) + "/" + pictures + "... (" + remaining + " minut" + ((remaining == 1) ? "" : "er") + " återstår)");
 				
-				if(this.timelapse_data.remaining == 0){
+				if(this.timelapse.remaining == 0){
 					// Timelapse färdig
 					logMsg("TIMELAPSE", "Timelapse färdig.");
 					this.websocket.send("tldone");
-					this.timelapse_data = null;
-					this.state.timelapse_running = false;
-					clearInterval(this.timelapse_interval);
+					this.timelapse.running = false;
+					clearInterval(this.timelapse.interval_id);
 				}
 			}, interval * 1000);
 		}else{
@@ -521,7 +527,7 @@ class LUMIX{
 						if(z <= 1){
 							logMsg("AUTO_EXP", "Ställer in inställningar på kameran: " + JSON.stringify(new_exp));
 							this.setShutter(new_exp.shtr).then(() => {
-								this.setISO(this.constants.isos[new_exp.iso]).then(() => {
+								this.setISO(LUMIX.ISOS[new_exp.iso]).then(() => {
 									this.setAperture(new_exp.aperture).then(() => {
 										logMsg("AUTO_EXP_DONE", "Färdig!");
 										resolve(new_exp);
@@ -542,7 +548,7 @@ class LUMIX{
 
 	getLiveExp(){
 		return new Promise((resolve,reject) => {
-			this.sendCommand("mode=startstream&value=49199").then(() => {
+			this.sendCommand({ mode: "startstream", value: "49199" }).then(() => {
 				let socket = dgram.createSocket("udp4");
 				let open = false;
 				socket.on("error", function(error){
@@ -550,7 +556,7 @@ class LUMIX{
   					if(open){
   						socket.close();
   					}
-  					this.sendCommand("mode=stopstream").then(() => {
+  					this.sendCommand({ mode: "stopstream" }).then(() => {
   						reject("Socket-fel.");
   					}, err => {
   						logMsg("GET_EXP_WARN", "Kunde inte stoppa stream: " + err);
@@ -565,14 +571,14 @@ class LUMIX{
 							let evs = [-3, -2.6, -2.3, -2, -1.6, -1.3, -1, -0.6, -0.3, 0, 0.3, 0.6, 1, 1.3, 1.6, 2, 2.3, 2.6, 3];
 							let evs_num = [-9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 							
-							this.sendCommand("mode=stopstream").then(() => {
+							this.sendCommand({ mode: "stopstream" }).then(() => {
 								resolve(evs_num[ev_id]);
 							}, err => {
 								logMsg("GET_EXP_WARN", "Kunde inte stoppa stream: " + err);
 								resolve(evs_num[ev_id]);
 							});
 						}else{
-							this.sendCommand("mode=stopstream").then(() => {
+							this.sendCommand({ mode: "stopstream" }).then(() => {
 								reject("Ogiltigt svar.");
 							}, err => {
 								logMsg("GET_EXP_WARN", "Kunde inte stoppa stream: "+err);
@@ -593,7 +599,7 @@ class LUMIX{
 				let timeout = setTimeout(() => {
 					if(open){
 						socket.close();
-						this.sendCommand("mode=stopstream").then(() => {
+						this.sendCommand({ mode: "stopstream" }).then(() => {
 							reject("Timeout");
 						}, err => {
 							logMsg("GET_EXP_WARN", "Kunde inte stoppa stream: " + err);
@@ -606,13 +612,13 @@ class LUMIX{
 	}
 
 	getLastPic(callback){
-		let spl_id = this.last_pic_data.id.split("-");
-		if(parseInt(spl_id[0]) == this.last_pic[0] && parseInt(spl_id[1]) == this.last_pic[1] && this.last_pic_data.data.length > 99){
+		let spl_id = this.last_pic_data.id;
+		if(spl_id[0] == this.last_pic[0] && spl_id[1] == this.last_pic[1]){
 			logMsg("CAM_GET_IMG", "Den senaste bilden är redan hämtad. Skickar ingen ny begäran.");
 			callback(this.last_pic_data.data);
 		} else {
 			let options = {
-  				hostname: camera.a,
+  				hostname: camera.addr,
   				port: 50001,
   				path: "/DS" + camera.last_pic[0].toString(10) + ("000" + camera.last_pic[1]).slice(-4) + ".JPG",
   				method: "GET",
@@ -629,7 +635,7 @@ class LUMIX{
   					let result = Buffer.concat(data);
   					if(result.length > 99){
   						this.last_pic_data = {
-							id: this.last_pic.join("-"),
+							id: Array(this.last_pic),
 							data: result
 						};
     					callback(Buffer.concat(data));
@@ -652,7 +658,7 @@ class LUMIX{
 
 	getCameraState(){
 		return new Promise((resolve, reject) => {
-			this.sendCommand("mode=getstate").then(result => {
+			this.sendCommand({ mode: "getstate" }).then(result => {
 				let status = {
 					batt: XML.getXMLValue(result, "batt"),
 					cammode: XML.getXMLValue(result, "cammode"),
@@ -689,8 +695,9 @@ class LUMIX{
 	}
 
 	sendCommand(cmd){
-		let a_ip = this.a;
-		logMsg("CAM_CMD", cmd);
+		let a_ip = this.addr;
+		let cmd_str = Object.entries(cmd).map(entry => entry.join("=")).join("&");
+		logMsg("CAM_CMD", cmd_str);
 		/*return new Promise(function(res,rej){
 			res("Lyckades!");
 		});*/
@@ -698,7 +705,7 @@ class LUMIX{
 			const options = {
   				hostname: a_ip,
   				port: 80,
-  				path: "/cam.cgi?" + cmd,
+  				path: "/cam.cgi?" + cmd_str,
   				method: "GET",
   				headers: { "User-Agent": "Lumix HTTP Remote" }
 			};
@@ -722,15 +729,6 @@ class LUMIX{
 			});
 			req.end();
 		});
-	}
-}
-
-class XML{
-	static getXMLValue(data, tag){
-		return data.slice(data.indexOf("<" + tag + ">") + tag.length + 2, data.indexOf("</" + tag + ">"));
-	}
-	static getXMLText(data){
-		return data.replace(/\r/g, "").replace(/<[0-9A-Za-z \=\"\'\.\?\-\/^>]*>/g, "");
 	}
 }
 
@@ -787,9 +785,8 @@ function begin(ip) {
 					let pic_count = parseInt(split[1]);
 					camera.startTimelapse(interval, pic_count);
 				} else if(msg_parsed[0] == "tlstop"){
-					camera.timelapse_data = null;
-					camera.state.timelapse_running = false;
-					clearInterval(camera.timelapse_interval);
+					camera.timelapse.running = false;
+					clearInterval(camera.timelapse.interval_id);
 					logMsg("TIMELAPSE_STOP", "Timelapse stoppas...");
 				} else if(msg_parsed[0] == "getcamstate"){
 					camera.getCameraState().then(result => {
@@ -832,7 +829,7 @@ function begin(ip) {
 					camera.last_pic = [parseInt(newid[0]), parseInt(newid[1])];
 				} else if(msg_parsed[0] == "connected"){
 					if(!camera.ready){
-						camera.sendCommand("mode=camcmd&value=recmode").then(res => {
+						camera.sendCommand({ mode: "camcmd", value: "recmode" }).then(res => {
 							camera.ready = true;
 							logMsg("CAM_READY", XML.getXMLText(res));
 						}, err => {
