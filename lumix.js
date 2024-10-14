@@ -17,45 +17,63 @@ function logMsg(type,msg){
 }
 
 class LUMIX{
-	static SHTR_SPEEDS_STR = [0, "1/2000", "1/1600", "1/1300", "1/1000", "1/800", "1/640", "1/500", "1/400", "1/320", "1/250", "1/200", "1/160", "1/125", "1/100", "1/80", "1/60", "1/50", "1/40", "1/30", "1/25", "1/20", "1/15", "1/13", "1/10", "1/8", "1/6", "1/5", "1/4", "1/3.2", "1/2.5", "1/2", "1/1.6", "1/1.3", "1", "1.3", "1.6", "2", "2.5", "3.2", "4", "5", "6", "8", "10", "13", "15", "20", "25", "30", "40", "50", "60", "T"];
-	static SHTR_SPEEDS = [0, 1/2000, 1/1600, 1/1300, 1/1000, 1/800, 1/640, 1/500, 1/400, 1/320, 1/250, 1/200, 1/160, 1/125, 1/100, 1/80, 1/60, 1/50, 1/40, 1/30, 1/25, 1/20, 1/15, 1/13, 1/10, 1/8, 1/6, 1/5, 1/4, 1/3.2, 1/2.5, 1/2, 1/1.6, 1/1.3, 1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6, 8, 10, 13, 15, 20, 25, 30, 40, 50, 60];
-	static APERTURES = [0, 2.8, 3.2, 3.5, 4, 4.5, 5, 5.6, 6.3, 7.1, 8];
-	static ISOS = [0, 80, 100, 125, 200, 400, 800, 1600, 3200, 6400, 12800, 25600];
-	static CAMERA_SHTR = [0, 2816, 2731, 2646, 2560, 2475, 2390, 2304, 2219, 2134, 2048, 1963, 1878, 1792, 1707, 1622, 1536, 1451, 1366, 1280, 1195, 1110, 1024, 939, 854, 768, 683, 598, 512, 427, 342, 256, 171, 86, 0, 65451, 65366, 65280, 65195, 65110, 65024, 64939, 64854, 64768, 64683, 64598, 64512, 64427, 64342, 64256, 64171, 64086, 64000, 16384]; // 16384 = T
-	static CAMERA_APERTURE = [0, 768, 854, 938, 1024, 1110, 1195, 1280, 1366, 1451, 1536];
+	static SHTR_SPEEDS_STR = ["T", "1/2000", "1/1600", "1/1300", "1/1000", "1/800", "1/640", "1/500", "1/400", "1/320", "1/250", "1/200", "1/160", "1/125", "1/100", "1/80", "1/60", "1/50", "1/40", "1/30", "1/25", "1/20", "1/15", "1/13", "1/10", "1/8", "1/6", "1/5", "1/4", "1/3.2", "1/2.5", "1/2", "1/1.6", "1/1.3", "1", "1.3", "1.6", "2", "2.5", "3.2", "4", "5", "6", "8", "10", "13", "15", "20", "25", "30", "40", "50", "60"];
+	static SHTR_SPEEDS = [-1, 1/2000, 1/1600, 1/1300, 1/1000, 1/800, 1/640, 1/500, 1/400, 1/320, 1/250, 1/200, 1/160, 1/125, 1/100, 1/80, 1/60, 1/50, 1/40, 1/30, 1/25, 1/20, 1/15, 1/13, 1/10, 1/8, 1/6, 1/5, 1/4, 1/3.2, 1/2.5, 1/2, 1/1.6, 1/1.3, 1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6, 8, 10, 13, 15, 20, 25, 30, 40, 50, 60];
+	static APERTURES = [2.8, 3.2, 3.5, 4, 4.5, 5, 5.6, 6.3, 7.1, 8];
+	static ISOS = [80, 100, 125, 200, 400, 800, 1600, 3200, 6400, 12800, 25600];
+	static CAMERA_SHTR = [16384, 2816, 2731, 2646, 2560, 2475, 2390, 2304, 2219, 2134, 2048, 1963, 1878, 1792, 1707, 1622, 1536, 1451, 1366, 1280, 1195, 1110, 1024, 939, 854, 768, 683, 598, 512, 427, 342, 256, 171, 86, 0, 65451, 65366, 65280, 65195, 65110, 65024, 64939, 64854, 64768, 64683, 64598, 64512, 64427, 64342, 64256, 64171, 64086, 64000]; // 16384 = T
+	static CAMERA_APERTURE = [768, 854, 938, 1024, 1110, 1195, 1280, 1366, 1451, 1536];
+
+	static OCAE_ORDER_DEFAULT = ["shtr", "aperture", "iso"];
+	static OCAEST_DISABLE = new Uint8Array([
+		0b10000010, // OCAEST
+		0, 0, 0, 0, 0, 0, 0
+	]);
 
 	constructor(ip){
 		this.addr = ip;
 		this.connected = false;
 		this.ready = false;
+		this.websocket;
+
+		/**
+		 * Timelapse state.
+		 */
 		this.timelapse = {
-			running: false,
 			interval_id: null,
 			total: 0,
 			interval: 0,
 			remaining: 0
 		};
-		this.websocket;
-		this.SOAP = false;
-		this.state = {
-			timed_shutter: false,
-			timed_shutter_t: 5,
-			photo_mode: 0,
-			shtr: 9,
-			aperture: 1,
-			iso: 3,
-			wb: 4000,
-			auto_exp: {
-				enabled: false,
-				order: ["shtr", "aperture", "iso"],
-				iso_limit: [1, 7],
-				shtr_limit: [1, 52],
-				aperture_limit: [1, 10] // TODO: Denna måste begränsas beroende på brännvidd/zoom?
-			}
+
+		/**
+		 * Current settings on the camera.
+		 */
+		this.camera_settings = {
+			iso_id: 3,
+			aperture_id: 1,
+			shtr_id: 9,
+			wb: 4000
 		};
+
+		/**
+		 * Additional settings.
+		 */
+		this.state = {
+			timed_shutter: 0,
+			photo_mode: 0
+		};
+
+		/**
+		 * Settings for "off-camera" (server) autoexposure.
+		 */
+		this.oc_auto_exp = {
+			enabled: false
+		};
+
 		this.last_pic = [119, 562];
 		this.last_pic_data = {
-			id: [0, 0],
+			id: [100, 1],
 			data: null
 		};
 	}
@@ -64,64 +82,16 @@ class LUMIX{
 		return new Promise((resolve, reject) => {
 			if(!this.connected){
 				logMsg("CAM_CONNECTING", this.addr);
-				this.sendCommand({ mode: "camcmd", value: "playmode" }).then(()=>{
+				this.sendCommand({ mode: "camcmd", value: "playmode" }).then(() => {
 					this.sendCommand({ mode: "get_content_info" }).then(res => {
-						let num = parseInt(XML.getXMLValue(res, "content_number"));
+						let num = parseInt(XML.getTagContents(res, "content_number"));
 						this.init(num || 1).then(img_num => {
 							if(!!img_num && img_num.length == 2){
 								this.last_pic = img_num;
 							}
+
 							this.connected = true;
-							this.sendCommand({ mode: "getsetting", type: "shtrspeed" }).then(shtr_speed => {
-								let shutter = parseInt(shtr_speed.split("shtrspeed=\"")[1].split("/")[0]);
-								let sp_id = LUMIX.CAMERA_SHTR.reduce(function(pr, cu, i){
-									let prev = LUMIX.CAMERA_SHTR[pr];
-									if(Math.abs(prev - shutter) < Math.abs(cu - shutter)){
-										return pr;
-									} else {
-										return i;
-									}
-								}, 0);
-								if(!isNaN(sp_id) && sp_id >= 1 && sp_id < LUMIX.SHTR_SPEEDS.length){
-									this.state.shtr = sp_id;
-									logMsg("CAM_GETSETTING_DONE", "Slutartid från kameran: " + LUMIX.SHTR_SPEEDS_STR[sp_id] + " s");
-								} else if(sp_id == 53){
-									this.setShutter(52);
-									logMsg("CAM_GETSETTING_SHTR_T", "Slutaren på kameran var inställd på T, ändrar till 60s");
-								} else {
-									logMsg("CAM_GETSETTING_ERROR", "Kunde inte läsa slutartiden från kameran.");
-								}
-							}, () => logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta slutartiden från kameran."));
-							this.sendCommand({ mode: "getsetting", "type": "iso" }).then(iso_val => {
-								let iso_int = parseInt(iso_val.split("iso=\"")[1].split("\"")[0]);
-								let iso_id = LUMIX.ISOS.indexOf(iso_int);
-								if(!isNaN(iso_id) && iso_id >= 1 && iso_id < LUMIX.ISOS.length){
-									this.state.iso = iso_id;
-									logMsg("CAM_GETSETTING_DONE", "ISO från kameran: " + iso_int);
-								} else {
-									logMsg("CAM_GETSETTING_ERROR", "Kunde inte läsa ISO från kameran.");
-								}
-							}, () => logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta ISO från kameran."));
-							// Aperture
-							this.sendCommand({ mode: "getsetting", type: "focal" }).then(aperture => {
-								let aperture2 = parseInt(aperture.split("focal=\"")[1].split("/")[0]);
-								let aperture_id = LUMIX.CAMERA_APERTURE.reduce((pr, cu, i) => {
-									let prev=LUMIX.CAMERA_APERTURE[pr];
-									if(Math.abs(prev - aperture2) < Math.abs(cu - aperture2)){
-										return pr;
-									} else {
-										return i;
-									}
-								}, 0);
-								if(!isNaN(aperture_id) && aperture_id >= 1 && aperture_id < LUMIX.APERTURES.length){
-									this.state.aperture = aperture_id;
-									logMsg("CAM_GETSETTING_DONE", "Bländartal från kameran: f/" + LUMIX.APERTURES[aperture_id]);
-								} else {
-									logMsg("CAM_GETSETTING_ERROR", "Kunde inte läsa bländartal från kameran.");
-								}
-							}, ()=>logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta bländartal från kameran."));
-							
-							resolve(XML.getXMLValue(res, "result") || "");
+							resolve(XML.getTagContents(res, "result") || "");
 						});
 					}, reject);
 				}, reject);
@@ -130,6 +100,56 @@ class LUMIX{
 				resolve("Redan ansluten.");
 			}
 		});
+	}
+
+	loadSettings(){
+		return Promise.all([
+			// Slutartid
+			this.sendCommand({ mode: "getsetting", type: "shtrspeed" }).then(shtr_speed => {
+				let shutter = parseInt(XML.getTagAttributeValue(shtr_speed, "settingvalue", "shtrspeed").split("/")[0]);
+				let sp_id = LUMIX.CAMERA_SHTR.reduce(function(pr, cu, i){
+					return Math.abs(LUMIX.CAMERA_SHTR[pr] - shutter) < Math.abs(cu - shutter) ? pr : i;
+				}, 0);
+				if(sp_id > 0){
+					this.camera_settings.shtr_id = sp_id;
+					logMsg("CAM_GETSETTING_DONE", "Slutartid från kameran: " + LUMIX.SHTR_SPEEDS_STR[sp_id] + " s");
+				} else {
+					this.setShutter(LUMIX.CAMERA_SHTR.length - 1);
+					logMsg("CAM_GETSETTING_SHTR_T", "Slutaren på kameran var inställd på T, ändrar till 60s");
+				}
+			}, () => logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta slutartiden från kameran.")),
+
+			// ISO
+			this.sendCommand({ mode: "getsetting", "type": "iso" }).then(iso_val => {
+				let iso_int = parseInt(XML.getTagAttributeValue(iso_val, "settingvalue", "iso").split("\"")[0]);
+				let iso_id = LUMIX.ISOS.indexOf(iso_int);
+				if(iso_id > 0){
+					this.camera_settings.iso_id = iso_id;
+					logMsg("CAM_GETSETTING_DONE", "ISO från kameran: " + iso_int);
+				} else {
+					logMsg("CAM_GETSETTING_ERROR", "Kunde inte läsa ISO från kameran.");
+				}
+			}, () => logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta ISO från kameran.")),
+
+			// Aperture
+			this.sendCommand({ mode: "getsetting", type: "focal" }).then(aperture => {
+				let aperture2 = parseInt(aperture.split("focal=\"")[1].split("/")[0]);
+				let aperture_id = LUMIX.CAMERA_APERTURE.reduce((pr, cu, i) => {
+					let prev=LUMIX.CAMERA_APERTURE[pr];
+					if(Math.abs(prev - aperture2) < Math.abs(cu - aperture2)){
+						return pr;
+					} else {
+						return i;
+					}
+				}, 0);
+				if(!isNaN(aperture_id) && aperture_id < LUMIX.APERTURES.length){
+					this.camera_settings.aperture_id = aperture_id;
+					logMsg("CAM_GETSETTING_DONE", "Bländartal från kameran: f/" + LUMIX.APERTURES[aperture_id]);
+				} else {
+					logMsg("CAM_GETSETTING_ERROR", "Kunde inte läsa bländartal från kameran.");
+				}
+			}, ()=>logMsg("CAM_GETSETTING_ERROR", "Kunde inte hämta bländartal från kameran."))
+		]);
 	}
 
 	init(num){
@@ -152,14 +172,12 @@ class LUMIX{
 				});
 				res.on("end", function(){
 					let img_num = data.slice(data.indexOf("dc:title>") + 9).slice(0, 8).split("-");
-					this.SOAP = true;
 					logMsg("CAM_SOAP_DONE", "Hämtade senaste bild-id: " + img_num.join(""));
 					resolve([parseInt(img_num[0]), parseInt(img_num[1])]);
 				});
 			});
 			request.on("error", function(err){
 				logMsg("CAM_SOAP_FAIL", "Misslyckades att skicka SOAP-brevet. Fel: " + err);
-				this.SOAP = false;
 				resolve(false);
 			});
 			request.write("<?xml version=\"1.0\" encoding=\"utf-8\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body><u:Browse xmlns:u=\"urn:schemas-upnp-org:service:ContentDirectory:1\"><ObjectID>0</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter></Filter><StartingIndex>" + (num - 1) + "</StartingIndex><RequestedCount>1</RequestedCount><SortCriteria></SortCriteria></u:Browse></s:Body></s:Envelope>");
@@ -180,53 +198,58 @@ class LUMIX{
 		}
 	}
 
+	sendCapture(){
+		return this.sendCommand({ mode: "camcmd", value: "capture" });
+	}
+
 	capture(){
 		return new Promise((resolve,reject) => {
-			if(!this.state.timed_shutter){
-				if(this.state.auto_exp.enabled == true){
+			if(this.state.timed_shutter > 0){
+				// Timed shutter
+				this.sendCapture().then(() => {
+					setTimeout(() => {
+						this.cancelCapture().then(resolve, reject);
+						this.pictureTaken();
+					}, this.state.timed_shutter * 1000);
+				}, reject);
+			}else{
+				if(this.oc_auto_exp.enabled){
+					// Server-AE
 					this.autoAdjustExp().then(() => {
-						this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
+						this.sendCapture().then(() => {
 							setTimeout(() => {
 								this.pictureTaken();
-							}, LUMIX.SHTR_SPEEDS[this.state.shtr] * 1000);
+							}, LUMIX.SHTR_SPEEDS[this.camera_settings.shtr_id] * 1000);
 						}, reject);
-						this.websocket.send("syncstate_" + JSON.stringify(camera.state));
+						this.websocket.send(this.createPacketDataSTATE()); // skicka nya inställningar
 					}, err => {
 						logMsg("AUTO_EXP_ERROR", "Kunde inte justera exponeringen. Fel: " + err);
-						this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
-							setTimeout(() => {
-								this.pictureTaken();
-							}, LUMIX.SHTR_SPEEDS[this.state.shtr] * 1000);
+						this.sendCapture().then(() => {
+							setTimeout(() => this.pictureTaken(), LUMIX.SHTR_SPEEDS[this.camera_settings.shtr_id] * 1000);
 						}, reject);
 					});
 				} else {
-					this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
+					// Vanlig bild
+					this.sendCapture().then(() => {
 						setTimeout(() => {
 							this.pictureTaken();
-						}, LUMIX.SHTR_SPEEDS[this.state.shtr] * 1000);
+						}, LUMIX.SHTR_SPEEDS[this.camera_settings.shtr_id] * 1000);
 					}, reject);
 				}
-			} else {
-				this.sendCommand({ mode: "camcmd", value: "capture" }).then(() => {
-					setTimeout(() => {
-						this.sendCommand({ mode: "camcmd", value: "capture_cancel" }).then(resolve, reject);
-						this.pictureTaken();
-					}, this.state.timed_shutter_t * 1000);
-				}, reject);
 			}
 		});
 	}
 
 	cancelCapture(){
-		return this.sendCommand({ mode: "camctrl", type: "capture_cancel" });
+		return this.sendCommand({ mode: "camcmd", value: "capture_cancel" });
 	}
 
 	setShutter(speed_id){
 		return new Promise((resolve, reject)=>{
-			if(speed_id !== this.state.shtr){
+			if(speed_id !== this.camera_settings.shtr_id){
 				let cmd = { mode: "setsetting", type: "shtrspeed", value: "16384/256" };
-				if(speed_id <= 52){
-					this.state.shtr = speed_id;
+				if(speed_id > 0){
+					this.camera_settings.shtr_id = speed_id;
 					let val=Math.round(2816 - 85.30232558139535 * (speed_id - 1));
 					cmd = { mode: "setsetting", type: "shtrspeed", value: val + "/256" };
 				}
@@ -244,11 +267,11 @@ class LUMIX{
 		});
 	}
 
-	setISO(iso){
+	setISO(iso_id){
 		return new Promise((resolve, reject)=>{
-			let new_iso_id = LUMIX.ISOS.indexOf(parseInt(iso));
-			if(this.state.iso !== new_iso_id){
-				this.state.iso = new_iso_id;
+			let iso = LUMIX.ISOS[iso_id];
+			if(this.camera_settings.iso_id !== iso_id){
+				this.camera_settings.iso_id = iso_id;
 				this.sendCommand({ mode: "setsetting", type: "iso", value: iso }).then(res => {
 					logMsg("SET_ISO_DONE", "Ställde in ISO till: " + iso);
 					resolve(res);
@@ -264,15 +287,15 @@ class LUMIX{
 	}
 
 	setWB(wb){
-		this.state.wb = parseInt(wb);
+		this.camera_settings.wb = parseInt(wb);
 		return this.sendCommand({ mode: "setsetting", type: "whitebalance", value: "color_temp", value2: wb });
 	}
 
 	setAperture(aperture_id){
 		return new Promise((resolve,reject) => {
-			if(this.state.aperture !== aperture_id){
-				this.state.aperture = aperture_id;
-				this.sendCommand({ mode: "setsetting", type: "focal", value: Math.round(768 + 85.30232558139535 *(parseInt(aperture_id) - 1)) + "/256" }).then(res => {
+			if(this.camera_settings.aperture_id !== aperture_id){
+				this.camera_settings.aperture_id = aperture_id;
+				this.sendCommand({ mode: "setsetting", type: "focal", value: Math.round(768 + 85.30232558139535 * aperture_id) + "/256" }).then(res => {
 					logMsg("SET_APERTURE_DONE", "Ställde in aperture till: f/" + LUMIX.APERTURES[aperture_id]);
 					resolve(res);
 				}, err => {
@@ -389,49 +412,42 @@ class LUMIX{
 
 	// Timer-relaterade funktioner
 	startTimelapse(interval, pictures){
-		if(this.timelapse.running){
+		if(this.timelapse.remaining > 0){
 			logMsg("TIMELAPSE_ERROR", "Kunde inte påbörja timelapse (körs redan).");
 			return;
 		}
 
-		if(!isNaN(interval) && !isNaN(pictures)){
-			// interval in seconds
-			this.timelapse.interval = parseInt(interval);
-			this.timelapse.total = parseInt(pictures);
-			this.timelapse.remaining = parseInt(pictures);
-			this.timelapse.running = true;
+		// interval in seconds
+		this.timelapse.interval = interval;
+		this.timelapse.total = pictures;
+		this.timelapse.remaining = pictures;
 
-			logMsg("TIMELAPSE", "Startar timelapse (" + pictures + " x " + interval + "s)...");
-			this.websocket.send("tlsync_" + interval + "&" + pictures + "&begin");
-			this.timelapse.interval_id = setInterval(() => {
-				this.timelapse.remaining--;
-				this.capture();
-				this.websocket.send("tlsync_" + interval + "&" + pictures + "&" + this.timelapse.remaining);
-				
-				let remaining = Math.ceil(interval * this.timelapse.remaining / 60);
-				logMsg("TIMELAPSE", "Tar foto " + (this.timelapse.total - this.timelapse.remaining).toString(10) + "/" + pictures + "... (" + remaining + " minut" + ((remaining == 1) ? "" : "er") + " återstår)");
-				
-				if(this.timelapse.remaining == 0){
-					// Timelapse färdig
-					logMsg("TIMELAPSE", "Timelapse färdig.");
-					this.websocket.send("tldone");
-					this.timelapse.running = false;
-					clearInterval(this.timelapse.interval_id);
-				}
-			}, interval * 1000);
-		}else{
-			logMsg("TIMELAPSE_ERROR", "Någon av de angivna siffrorna är NaN");
-		}
+		logMsg("TIMELAPSE", "Startar timelapse (" + pictures + " x " + interval + "s)...");
+		this.websocket.send(this.createPacketDataTLSTAT());
+		this.timelapse.interval_id = setInterval(() => {
+			this.timelapse.remaining--;
+			this.capture();
+			this.websocket.send(this.createPacketDataTLSTAT());
+			
+			let remaining = Math.ceil(interval * this.timelapse.remaining / 60);
+			logMsg("TIMELAPSE", "Tar foto " + (this.timelapse.total - this.timelapse.remaining).toString(10) + "/" + pictures + "... (" + remaining + " minut" + ((remaining == 1) ? "" : "er") + " återstår)");
+			
+			if(this.timelapse.remaining == 0){
+				// Timelapse färdig
+				logMsg("TIMELAPSE", "Timelapse färdig.");
+				clearInterval(this.timelapse.interval_id);
+			}
+		}, interval * 1000);
 	}
 
 	autoAdjustExp(){
 		return new Promise((resolve, reject)=>{
-			if(!this.state.timed_shutter){
-				let opt = this.state.auto_exp;
+			if(this.state.timed_shutter == 0){
+				let opt = this.oc_auto_exp;
 				let new_exp = {
-					iso: this.state.iso,
-					shtr: this.state.shtr,
-					aperture: this.state.aperture
+					iso: this.camera_settings.iso_id,
+					shtr: this.camera_settings.shtr_id,
+					aperture: this.camera_settings.aperture_id
 				};
 				this.getLiveExp().then(res => {
 					let iso_ne;
@@ -527,7 +543,7 @@ class LUMIX{
 						if(z <= 1){
 							logMsg("AUTO_EXP", "Ställer in inställningar på kameran: " + JSON.stringify(new_exp));
 							this.setShutter(new_exp.shtr).then(() => {
-								this.setISO(LUMIX.ISOS[new_exp.iso]).then(() => {
+								this.setISO(new_exp.iso).then(() => {
 									this.setAperture(new_exp.aperture).then(() => {
 										logMsg("AUTO_EXP_DONE", "Färdig!");
 										resolve(new_exp);
@@ -618,9 +634,9 @@ class LUMIX{
 			callback(this.last_pic_data.data);
 		} else {
 			let options = {
-  				hostname: camera.addr,
+  				hostname: this.addr,
   				port: 50001,
-  				path: "/DS" + camera.last_pic[0].toString(10) + ("000" + camera.last_pic[1]).slice(-4) + ".JPG",
+  				path: "/DS" + this.last_pic[0].toString(10) + ("000" + this.last_pic[1]).slice(-4) + ".JPG",
   				method: "GET",
   				headers: { "User-Agent": "Lumix HTTP Remote" }
 			};
@@ -648,50 +664,88 @@ class LUMIX{
 			
 			request.on("error", e => {
 				logMsg("LATEST_IMG_ERROR", "Kunde inte hämta den senaste bilden. Fel: " + e.message);
-				callback(false);
+				callback(null);
 			});
 			request.end();
-		} //else {
-		//	logMsg("LATEST_IMG_ERROR", "SOAP har inte startats.");
-		//}
+		}
 	}
 
 	getCameraState(){
 		return new Promise((resolve, reject) => {
 			this.sendCommand({ mode: "getstate" }).then(result => {
 				let status = {
-					batt: XML.getXMLValue(result, "batt"),
-					cammode: XML.getXMLValue(result, "cammode"),
-					remaincapacity: parseInt(XML.getXMLValue(result, "remaincapacity")),
-					sdcardstatus: XML.getXMLValue(result, "sdcardstatus"),
-					sd_memory: XML.getXMLValue(result, "sd_memory"),
-					video_remaincapacity: parseInt(XML.getXMLValue(result, "video_remaincapacity")),
-					rec: XML.getXMLValue(result, "rec"),
-					burst_interval_status: XML.getXMLValue(result, "burst_interval_status"),
-					sd_access: XML.getXMLValue(result, "sd_access"),
-					rem_disp_typ: XML.getXMLValue(result, "rem_disp_typ"),
-					progress_time: XML.getXMLValue(result, "progress_time"),
-					operate: XML.getXMLValue(result, "operate"),
-					stop_motion_num: parseInt(XML.getXMLValue(result, "stop_motion_num")),
-					stop_motion: XML.getXMLValue(result, "stop_motion"),
-					temperature: XML.getXMLValue(result, "temperature"),
-					lens: XML.getXMLValue(result, "lens"),
-					add_location_data: XML.getXMLValue(result, "add_location_data"),
-					interval_status: XML.getXMLValue(result, "interval_status"),
-					sdi_state: XML.getXMLValue(result, "sdi_state"),
-					sd2_cardstatus: XML.getXMLValue(result, "sd2_cardstatus"),
-					sd2_memory: XML.getXMLValue(result, "sd2_memory"),
-					sd2_access: XML.getXMLValue(result, "sd2_access"),
-					current_sd: XML.getXMLValue(result, "current_sd"),
-					backupmode: XML.getXMLValue(result, "backupmode"),
-					batt_grip: XML.getXMLValue(result, "batt_grip"),
-					warn_disp: XML.getXMLValue(result, "warn_disp"),
-					version: XML.getXMLValue(result, "version")
+					batt: XML.getTagContents(result, "batt"),
+					cammode: XML.getTagContents(result, "cammode"),
+					remaincapacity: parseInt(XML.getTagContents(result, "remaincapacity")),
+					sdcardstatus: XML.getTagContents(result, "sdcardstatus"),
+					sd_memory: XML.getTagContents(result, "sd_memory"),
+					video_remaincapacity: parseInt(XML.getTagContents(result, "video_remaincapacity")),
+					rec: XML.getTagContents(result, "rec"),
+					burst_interval_status: XML.getTagContents(result, "burst_interval_status"),
+					sd_access: XML.getTagContents(result, "sd_access"),
+					rem_disp_typ: XML.getTagContents(result, "rem_disp_typ"),
+					progress_time: XML.getTagContents(result, "progress_time"),
+					operate: XML.getTagContents(result, "operate"),
+					stop_motion_num: parseInt(XML.getTagContents(result, "stop_motion_num")),
+					stop_motion: XML.getTagContents(result, "stop_motion"),
+					temperature: XML.getTagContents(result, "temperature"),
+					lens: XML.getTagContents(result, "lens"),
+					add_location_data: XML.getTagContents(result, "add_location_data"),
+					interval_status: XML.getTagContents(result, "interval_status"),
+					sdi_state: XML.getTagContents(result, "sdi_state"),
+					sd2_cardstatus: XML.getTagContents(result, "sd2_cardstatus"),
+					sd2_memory: XML.getTagContents(result, "sd2_memory"),
+					sd2_access: XML.getTagContents(result, "sd2_access"),
+					current_sd: XML.getTagContents(result, "current_sd"),
+					backupmode: XML.getTagContents(result, "backupmode"),
+					batt_grip: XML.getTagContents(result, "batt_grip"),
+					warn_disp: XML.getTagContents(result, "warn_disp"),
+					version: XML.getTagContents(result, "version")
 				};
 				logMsg("CAM_STATUS", "Batteri: " + status.batt + ", temp: " + status.temperature + ", ledigt utrymme: " + status.remaincapacity + " bilder.");
 				resolve(status);
 			}, err => reject(err));
 		});
+	}
+
+	createPacketDataSTATE(){
+		return new Uint8Array([
+			0b10000000, // STATE
+			this.camera_settings.iso_id,
+			this.camera_settings.aperture_id,
+			this.camera_settings.shtr_id,
+			this.camera_settings.wb >>> 8,
+			this.camera_settings.wb & 0xFF,
+			this.state.timed_shutter,
+			this.state.photo_mode
+		]);
+	}
+
+	createPacketDataTLSTAT(){
+		return new Uint8Array([
+			0b10000000, // TLSTAT
+			this.timelapse.interval,
+			this.timelapse.total >>> 8,
+			this.timelapse.total & 0xFF,
+			this.timelapse.remaining >>> 8,
+			this.timelapse.remaining & 0xFF
+		]);
+	}
+
+	createPacketDataOCAEST(){
+		if(!this.oc_auto_exp.enabled){
+			return LUMIX.OCAEST_DISABLE;
+		}
+		return new Uint8Array([
+			0b10000010, // OCAEST
+			this.oc_auto_exp.iso_limit[0],
+			this.oc_auto_exp.iso_limit[1],
+			this.oc_auto_exp.aperture_limit[0],
+			this.oc_auto_exp.aperture_limit[1],
+			this.oc_auto_exp.shtr_limit[0],
+			this.oc_auto_exp.shtr_limit[1],
+			this.oc_auto_exp.order_id & 0b111
+		]);
 	}
 
 	sendCommand(cmd){
@@ -732,94 +786,144 @@ class LUMIX{
 	}
 }
 
-var camera;
 function begin(ip) {
-    camera = new LUMIX(ip);
-	camera.connect().then(function(res){
-		logMsg("CAM_CONNECTED", XML.getXMLText(res));
-		new ws.Server({ port: 8081 },function(){
+    let camera = new LUMIX(ip);
+	camera.connect().then(async function(res){
+		logMsg("CAM_CONNECTED", XML.getAllText(res));
+		await camera.loadSettings();
+		new ws.Server({ port: 8081 }, function(){
 			logMsg("WS_READY", "Lyssnar efter anslutningar på port 8081...");
 		}).on("connection", function connection(wss) {
 			let remote_addr = wss._socket.remoteAddress.replace(/[^0-9.]/g, "");
 			logMsg("WS_CONN", "Inkommande anslutning från " + remote_addr);
 			camera.websocket = wss;
 			wss.on("message", function(message) {
-				let msg_parsed = message.split("_");
 				logMsg("WS_RX", remote_addr + ": " + message);
-				if(msg_parsed[0] == "shutter"){
-					// Ändra slutartid
-					let shtr_speed_id = parseInt(msg_parsed[1]);
-					camera.setShutter(shtr_speed_id).then(()=>{}, err => {
-						logMsg("SET_SHTR_ERROR", "Kunde inte ställa in slutartid: " + err);
-						wss.send("error_Kunde inte ställa in slutartiden");
-					});
-				} else if(msg_parsed[0] == "iso"){
-					// Ändra ISO-känslighet
-					camera.setISO(parseInt(msg_parsed[1])).then(()=>{}, err => {
-						logMsg("SET_ISO_ERROR", "Kunde inte ställa in ISO: " + err);
-						wss.send("error_Kunde inte ställa in ISO");
-					});
-				} else if(msg_parsed[0] == "aperture"){
-					// Ändra aperture
-					camera.setAperture(parseInt(msg_parsed[1])).then(()=>{}, err => {
-						logMsg("SET_APERTURE_ERROR", "Kunde inte ställa in aperture: " + err);
-						wss.send("error_Kunde inte ställa in aperture");
-					});
-				} else if(msg_parsed[0] == "wb"){
-					camera.setWB(parseInt(msg_parsed[1])).then(()=>{}, err => {
-						logMsg("SET_WB_ERROR", "Kunde inte ställa in vitbalans: " + err);
-						wss.send("error_Kunde inte ställa in vitbalans");
-					});
-				} else if(msg_parsed[0] == "capture"){
-					camera.capture();
-				} else if(msg_parsed[0] == "cancelcapture"){
+				switch(message[0]){
+					case 0b00: // READY
+						wss.send(camera.createPacketDataSTATE());
+						wss.send(camera.createPacketDataOCAEST());
+
+						if(!camera.ready){
+							camera.setMode("rec").then(res => {
+								camera.ready = true;
+								logMsg("CAM_READY", XML.getAllText(res));
+							}, err => {
+								camera.ready = false;
+								logMsg("CAM_START_ERROR", "Kunde inte aktivera recmode på kameran. Fel: " + err);
+							});
+						}
+						break;
+					case 0b1: // CAPTURE
+						camera.capture();
+						break;
+					case 0b11: // GLPIC
+						// Hämta senaste bild
+						camera.getLastPic(res => {
+							if(!!res){
+								wss.send(
+									Buffer.concat([
+										Buffer.from([0b10000011]), res // NEWIMG
+									])
+								);
+							}
+						});
+						break;
+					case 0b100: // SETISO - Ändra ISO-känslighet
+						camera.setISO(message[1]).then(() => {}, err => {
+							logMsg("SET_ISO_ERROR", "Kunde inte ställa in ISO: " + err);
+							//wss.send("error_Kunde inte ställa in ISO");
+						});
+						break;
+					case 0b101: // SETAPER - Ändra aperture
+						camera.setAperture(message[1]).then(() => {}, err => {
+							logMsg("SET_APERTURE_ERROR", "Kunde inte ställa in aperture: " + err);
+							//wss.send("error_Kunde inte ställa in aperture");
+						});
+						break;
+					case 0b110: // SETSHTR - Ändra slutartid
+						camera.setShutter(message[1]).then(() => {}, err => {
+							logMsg("SET_SHTR_ERROR", "Kunde inte ställa in slutartid: " + err);
+							//wss.send("error_Kunde inte ställa in slutartiden");
+						});
+						break;
+					case 0b111: // SETWB
+						camera.setWB((message[1] << 8) + message[2]).then(() => {}, err => {
+							logMsg("SET_WB_ERROR", "Kunde inte ställa in vitbalans: " + err);
+							//wss.send("error_Kunde inte ställa in vitbalans");
+						});
+						break;
+					case 0b1001: // TLSTART - Starta/ändra/avbryt timelapse
+						if(message[1] + message[2] + message[3] == 0){
+							// Stoppa timelapse
+							camera.timelapse.remaining = 0;
+							clearInterval(camera.timelapse.interval_id);
+							logMsg("TIMELAPSE_STOP", "Timelapse stoppas...");
+						}else{
+							// Starta timelapse
+							camera.startTimelapse(message[1], message[2]);
+						}
+						break;
+					case 0b1011: // TSHSET - Ställ in timed shutter
+						if(message[1] == 0){
+							// Avaktivera "timed shutter"
+							logMsg("TIMED_SHUTTER", "Avaktiverar \"timed shutter\"...");
+							camera.state.timed_shutter = 0;
+							camera.setShutter(camera.camera_settings.shtr_id);
+						}else{
+							// Aktivera "timed shutter"
+							logMsg("TIMED_SHUTTER", "Aktiverar \"timed shutter\" (" + message[1] + " s)...");
+							camera.state.timed_shutter = message[1];
+							camera.setShutter(0); // T
+						}
+						break;
+					case 0b1010: // OCAESET
+						if(message[1] + message[2] + message[3] + message[4] + message[5] + message[6] + message[7] == 0){
+							// stäng av
+							camera.oc_auto_exp.enabled = false;
+							logMsg("AUTO_EXP", "Auto-exponering (server) har stängts av.");
+						}else{
+							let order_id = message[7] & 0b111;
+							let first = (order_id >>> 1) % 3;
+							let second = (first + (message[7] & 0b1) * 2 + 2) % 3;
+							let third = ~(first ^ second) & 0b11;
+
+							camera.oc_auto_exp = {
+								enabled: true,
+								order: [
+									LUMIX.OCAE_ORDER_DEFAULT[first],
+									LUMIX.OCAE_ORDER_DEFAULT[second],
+									LUMIX.OCAE_ORDER_DEFAULT[third]
+								],
+								order_id: order_id,
+								iso_limit: [message[1], message[2]],
+								shtr_limit: [message[5], message[6]],
+								aperture_limit: [message[3], message[4]]
+							};
+
+							logMsg("AUTO_EXP_CHANGE", "Nya inställningar: " + JSON.stringify(camera.oc_auto_exp));
+						}
+						break;
+					default:
+						logMsg("WS_RX_ERROR", "Okänt websocket-meddelande från klienten: " + message);
+				}
+
+				/*
+				let msg_parsed = message.split("_");
+				
+				if(msg_parsed[0] == "cancelcapture"){
 					camera.cancelCapture();
 				} else if(msg_parsed[0] == "selectmode"){
 					camera.selectMode(parseInt(msg_parsed[1]));
 				} else if(msg_parsed[0] == "getstate"){
 					logMsg("WS_TX", remote_addr + ": syncstate_" + JSON.stringify(camera.state));
 					wss.send("syncstate_" + JSON.stringify(camera.state));
-				} else if(msg_parsed[0] == "tlstart"){
-					let split = msg_parsed[1].split("&");
-					let interval = parseInt(split[0]);
-					let pic_count = parseInt(split[1]);
-					camera.startTimelapse(interval, pic_count);
-				} else if(msg_parsed[0] == "tlstop"){
-					camera.timelapse.running = false;
-					clearInterval(camera.timelapse.interval_id);
-					logMsg("TIMELAPSE_STOP", "Timelapse stoppas...");
 				} else if(msg_parsed[0] == "getcamstate"){
 					camera.getCameraState().then(result => {
 						wss.send("camstate_" + JSON.stringify(result));
 					});
 				} else if(msg_parsed[0] == "setfocus"){
 					camera.setFocus(parseInt(msg_parsed[1]), 20);
-				} else if(msg_parsed[0] == "tsh"){
-					// Timed shutter-läge
-					if(msg_parsed[1] == "on"){
-						// Aktivera "timed shutter"
-						logMsg("TIMED_SHUTTER", "Aktiverar \"timed shutter\"...");
-						camera.state.timed_shutter = true;
-						camera.setShutter(53);
-					} else {
-						// Avaktivera "timed shutter"
-						logMsg("TIMED_SHUTTER", "Avaktiverar \"timed shutter\"...");
-						camera.state.timed_shutter = false;
-						camera.setShutter(camera.state.shtr);
-					}
-				} else if(msg_parsed[0] == "tshset"){
-					let tsh_nt = parseInt(msg_parsed[1]);
-					if(!isNaN(tsh_nt)){
-						logMsg("TIMED_SHUTTER", "Ställer in \"timed shutter\" till " + tsh_nt + "s...");
-						camera.state.timed_shutter_t = tsh_nt;
-					}
-				} else if(msg_parsed[0] == "glpic"){
-					// Hämta senaste bild
-					camera.getLastPic(res => {
-						if(res !== false){
-							wss.send("newimg_image/jpg;base64," + res.toString("base64"));
-						}
-					});
 				} else if(msg_parsed[0] == "glelv"){
 					camera.getLiveExp().then(res => {
 						logMsg("EXPOSURE_LVL", res[2] + " (brightness: " + res[0] + ")");
@@ -831,58 +935,18 @@ function begin(ip) {
 					if(!camera.ready){
 						camera.sendCommand({ mode: "camcmd", value: "recmode" }).then(res => {
 							camera.ready = true;
-							logMsg("CAM_READY", XML.getXMLText(res));
+							logMsg("CAM_READY", XML.getAllText(res));
 						}, err => {
 							camera.ready = false;
 							logMsg("CAM_START_ERROR", "Kunde inte aktivera recmode på kameran. Fel: " + err);
 						});
-					}
-				} else if(msg_parsed[0] == "aexp"){
-					if(msg_parsed[1] == "on"){
-						// Avaktivera auto-exponering på servern.
-						camera.state.auto_exp.enabled = true;
-						logMsg("AUTO_EXP", "Auto-exponering har satts på.");
-					} else {
-						// Aktivera auto-exponering på servern.
-						camera.state.auto_exp.enabled = false;
-						logMsg("AUTO_EXP", "Auto-exponering har stängts av.");
-					}
-				} else if(msg_parsed[0] == "saexp"){
-					// Ställ in auto-exponering på servern.
-					let aexp_set=msg_parsed[1].split("&");
-					if(aexp_set[0] == "apn"){
-						// Aperture min
-						camera.state.auto_exp.aperture_limit[0] = parseInt(aexp_set[1]);
-						logMsg("AUTO_EXP_CHANGE", "Min. aperture: " + aexp_set[1]);
-					} else if(aexp_set[0] == "apx"){
-						// Aperture max
-						camera.state.auto_exp.aperture_limit[1] = parseInt(aexp_set[1]);
-						logMsg("AUTO_EXP_CHANGE", "Max. aperture: " + aexp_set[1]);
-					} else if(aexp_set[0] == "shn"){
-						// Shutter min
-						camera.state.auto_exp.shtr_limit[0] = parseInt(aexp_set[1]);
-						logMsg("AUTO_EXP_CHANGE", "Min. slutartid: " + aexp_set[1]);
-					} else if(aexp_set[0] == "shx"){
-						// Shutter max
-						camera.state.auto_exp.shtr_limit[1] = parseInt(aexp_set[1]);
-						logMsg("AUTO_EXP_CHANGE", "Max. slutartid: " + aexp_set[1]);
-					} else if(aexp_set[0] == "ison"){
-						// ISO min
-						camera.state.auto_exp.iso_limit[0] = parseInt(aexp_set[1]);
-						logMsg("AUTO_EXP_CHANGE", "Min. ISO: " + aexp_set[1]);
-					} else if(aexp_set[0] == "isox"){
-						// ISO max
-						camera.state.auto_exp.iso_limit[1] = parseInt(aexp_set[1]);
-						logMsg("AUTO_EXP_CHANGE", "Max. ISO: " + aexp_set[1]);
-					} else if(aexp_set[0] == "ord"){
-						console.log("Ny ordning: " + aexp_set[1].split("0"));
 					}
 				}
 				
 				/*else if(msg_parsed[0] == "foc-n"){ // OBS! Denna är inte fixad på klienten ännu.
 					// Fokusera närmre
 					camera.focusNear().then(res => {
-						logMsg("SET_FOCUS_DONE", "Fokuserade närmre. " + XML.getXMLText(res));
+						logMsg("SET_FOCUS_DONE", "Fokuserade närmre. " + XML.getAllText(res));
 						wss.send("m_focus_" + res);
 					},err => {
 						logMsg("SET_FOCUS_ERROR", "Kunde inte fokusera: " + err);

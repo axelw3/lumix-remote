@@ -6,114 +6,133 @@
 			<meta name="apple-mobile-web-app-capable" content="yes">
 			
 			<script>
-			const p="data:text/html;base64,PGJvZHk+PC9ib2R5Pg==";
-			let conn_timeout,tto,shs=0,ahs=0,ihs=0;
+			const p = "data:text/html;base64,PGJvZHk+PC9ib2R5Pg==";
 			class LUMIX_CLIENT{
-				// Dessa är färdiga (dvs. uppgraderade för att använda WebSockets.
+				static SHTR_SPEEDS_STR = ["T", "1/2000", "1/1600", "1/1300", "1/1000", "1/800", "1/640", "1/500", "1/400", "1/320", "1/250", "1/200", "1/160", "1/125", "1/100", "1/80", "1/60", "1/50", "1/40", "1/30", "1/25", "1/20", "1/15", "1/13", "1/10", "1/8", "1/6", "1/5", "1/4", "1/3.2", "1/2.5", "1/2", "1/1.6", "1/1.3", "1", "1.3", "1.6", "2", "2.5", "3.2", "4", "5", "6", "8", "10", "13", "15", "20", "25", "30", "40", "50", "60"];
+				static SHTR_SPEEDS = [-1, 1/2000, 1/1600, 1/1300, 1/1000, 1/800, 1/640, 1/500, 1/400, 1/320, 1/250, 1/200, 1/160, 1/125, 1/100, 1/80, 1/60, 1/50, 1/40, 1/30, 1/25, 1/20, 1/15, 1/13, 1/10, 1/8, 1/6, 1/5, 1/4, 1/3.2, 1/2.5, 1/2, 1/1.6, 1/1.3, 1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6, 8, 10, 13, 15, 20, 25, 30, 40, 50, 60];
+				static APERTURES = [2.8, 3.2, 3.5, 4, 4.5, 5, 5.6, 6.3, 7.1, 8];
+				static ISOS = [80, 100, 125, 200, 400, 800, 1600, 3200, 6400, 12800, 25600];
+
+				// Dessa är färdiga (dvs. uppgraderade för att använda WebSockets).
 				constructor(){
-					this.state;
+					/**
+					 * Timelapse state.
+					 */
+					this.timelapse = {
+						total: 0,
+						interval: 0,
+						remaining: 0
+					};
+
+					/**
+					 * Current settings on the camera.
+					 */
+					this.camera_settings = {
+						iso_id: 0,
+						aperture_id: 0,
+						shtr_id: 0,
+						wb: 4000
+					};
+
+					/**
+					 * Additional settings.
+					 */
+					this.state = {
+						timed_shutter: 0,
+						photo_mode: 0
+					};
+
+					/**
+					 * Settings for "off-camera" (server) autoexposure.
+					 */
+					this.oc_auto_exp = {
+						enabled: false,
+						order_id: 0b001,
+						iso_limit: [0, 6],
+						shtr_limit: [1, 51],
+						aperture_limit: [0, 9]
+					};
+
 					this.websocket;
-					this.el={
-						sl_sv:document.getElementById("sl_sv"),
-						sl_s:document.getElementById("sl_s"),
-						sl_i:document.getElementById("sl_i"),
-						sl_iv:document.getElementById("sl_iv"),
-						sl_av:document.getElementById("sl_av"),
-						sl_a:document.getElementById("sl_a"),
-						sl_w:document.getElementById("sl_w"),
-						sl_wv:document.getElementById("sl_wv"),
-						spt:document.getElementById("spt"),
-						tlt:document.getElementById("tlt"),
-						brt:document.getElementById("brt"),
-						brc:document.getElementById("brc"),
-						tlc:document.getElementById("tlc"),
-						spc:document.getElementById("spc"),
-						sbtn:document.getElementById("sbtn"),
-						ti:document.getElementById("ti"),
-						sl_it:document.getElementById("sl_it"),
-						sl_im:document.getElementById("sl_im"),
-						tlr:document.getElementById("tlr"),
-						pr:document.getElementById("pr"),
-						tr:document.getElementById("tr"),
-						sl_itv:document.getElementById("sl_itv"),
-						sl_imv:document.getElementById("sl_imv"),
-						tsh:document.getElementById("tsh"),
-						pci:document.getElementById("pci"),
-						saeb:document.getElementById("saeb"),
-						saed:document.getElementById("saed"),
-						aec:document.getElementById("aec"),
-						sae_in_sel:document.getElementById("sae_in_sel"),
-						sae_ix_sel:document.getElementById("sae_ix_sel"),
-						sae_sn_sel:document.getElementById("sae_sn_sel"),
-						sae_sx_sel:document.getElementById("sae_sx_sel"),
-						sae_an_sel:document.getElementById("sae_an_sel"),
-						sae_ax_sel:document.getElementById("sae_ax_sel"),
-						sae_o_sel:document.getElementById("sae_o_sel"),
-						lpu:document.getElementById("lpu"),
-						lpset:document.getElementById("lpset")
+					this.el = {
+						sl_sv: document.getElementById("sl_sv"),
+						shutterSpeedInput: document.getElementById("sl_s"),
+						isoInput: document.getElementById("sl_i"),
+						isoText: document.getElementById("sl_iv"),
+						apertureText: document.getElementById("sl_av"),
+						apertureInput: document.getElementById("sl_a"),
+						wbInput: document.getElementById("sl_w"),
+						wbText: document.getElementById("sl_wv"),
+						spt: document.getElementById("spt"),
+						tlt: document.getElementById("tlt"),
+						brt: document.getElementById("brt"),
+						brc: document.getElementById("brc"),
+						tlc: document.getElementById("tlc"),
+						spc: document.getElementById("spc"),
+						shutterReleaseBtn: document.getElementById("sbtn"),
+						startTimelapseBtn: document.getElementById("ti"),
+						sl_it: document.getElementById("sl_it"),
+						sl_im: document.getElementById("sl_im"),
+						tlr: document.getElementById("tlr"),
+						pr: document.getElementById("pr"),
+						tr: document.getElementById("tr"),
+						sl_itv: document.getElementById("sl_itv"),
+						sl_imv: document.getElementById("sl_imv"),
+						tsh: document.getElementById("tsh"),
+						pci: document.getElementById("pci"),
+						saeb: document.getElementById("saeb"),
+						saed: document.getElementById("saed"),
+						aec: document.getElementById("aec"),
+						sae_in_sel: document.getElementById("sae_in_sel"),
+						sae_ix_sel: document.getElementById("sae_ix_sel"),
+						sae_sn_sel: document.getElementById("sae_sn_sel"),
+						sae_sx_sel: document.getElementById("sae_sx_sel"),
+						sae_an_sel: document.getElementById("sae_an_sel"),
+						sae_ax_sel: document.getElementById("sae_ax_sel"),
+						sae_o_sel: document.getElementById("sae_o_sel"),
+						lpu: document.getElementById("lpu"),
+						lpset: document.getElementById("lpset")
 					};
-					this.constants={
-						shtr_speeds_str:[0,"1/2000","1/1600","1/1300","1/1000","1/800","1/640","1/500","1/400","1/320","1/250","1/200","1/160","1/125","1/100","1/80","1/60","1/50","1/40","1/30","1/25","1/20","1/15","1/13","1/10","1/8","1/6","1/5","1/4","1/3.2","1/2.5","1/2","1/1.6","1/1.3","1","1.3","1.6","2","2.5","3.2","4","5","6","8","10","13","15","20","25","30","40","50","60"],
-						shtr_speeds:[0,1/2000,1/1600,1/1300,1/1000,1/800,1/640,1/500,1/400,1/320,1/250,1/200,1/160,1/125,1/100,1/80,1/60,1/50,1/40,1/30,1/25,1/20,1/15,1/13,1/10,1/8,1/6,1/5,1/4,1/3.2,1/2.5,1/2,1/1.6,1/1.3,1,1.3,1.6,2,2.5,3.2,4,5,6,8,10,13,15,20,25,30,40,50,60],
-						apertures:[0,2.8,3.2,3.5,4,4.5,5,5.6,6.3,7.1,8],
-						isos:[0,80,100,125,200,400,800,1600,3200,6400,12800,25600]
-					};
-					this.sae_visible=false;
+
+					this.sae_visible = false;
+
 					let socket=new WebSocket('ws://ipa.ddr.ish.ere:8081');
-					socket.addEventListener('open',(event)=>{
-						socket.send("connected");
-						socket.send("getstate");
+					socket.addEventListener('open', event => {
+						socket.send(new Uint8Array([0b0])); // klient redo
 						this.websocket=socket;
-						// Shutter input
-						this.el.sl_s.addEventListener("input",()=>this.setShutter(parseInt(this.el.sl_s.value),false));
-						// Shutter change
-						this.el.sl_s.addEventListener("change",()=>this.setShutter(parseInt(this.el.sl_s.value),true));
+						// Shutter input/change
+						this.el.shutterSpeedInput.addEventListener("input", () => this.setShutter(-1, false));
+						this.el.shutterSpeedInput.addEventListener("change", () => this.setShutter(-1, true));
 						
-						// Aperture input
-						this.el.sl_a.addEventListener("input",()=>this.setAperture(parseInt(this.el.sl_a.value),false));
-						// Aperture change
-						this.el.sl_a.addEventListener("change",()=>this.setAperture(parseInt(this.el.sl_a.value),true));
+						// Aperture input/change
+						this.el.apertureInput.addEventListener("input", () => this.setAperture(parseInt(this.el.apertureInput.value), false));
+						this.el.apertureInput.addEventListener("change", () => this.setAperture(parseInt(this.el.apertureInput.value), true));
 						
-						// ISO input
-						this.el.sl_i.addEventListener("input",()=>this.setISO(parseInt(this.el.sl_i.value),false));
-						// ISO change
-						this.el.sl_i.addEventListener("change",()=>this.setISO(parseInt(this.el.sl_i.value),true));
+						// ISO input/change
+						this.el.isoInput.addEventListener("input", () => this.setISO(parseInt(this.el.isoInput.value), false));
+						this.el.isoInput.addEventListener("change", () => this.setISO(parseInt(this.el.isoInput.value), true));
 						
-						// WB input
-						this.el.sl_w.addEventListener("input",()=>this.setWB(parseInt(this.el.sl_w.value),false));
-						// WB change
-						this.el.sl_w.addEventListener("change",()=>this.setWB(parseInt(this.el.sl_w.value),true));
+						// WB input/change
+						this.el.wbInput.addEventListener("input", () => this.setWB(parseInt(this.el.wbInput.value), false));
+						this.el.wbInput.addEventListener("change", () => this.setWB(parseInt(this.el.wbInput.value), true));
 						
 						// Välj läge (foto, timelapse, burst)
-						this.el.spt.addEventListener("click",()=>this.setPhotoMode(0,true));
-						this.el.tlt.addEventListener("click",()=>this.setPhotoMode(1,true));
-						this.el.brt.addEventListener("click",()=>this.setPhotoMode(2,true));
+						this.el.spt.addEventListener("click", () => this.setPhotoMode(0, true));
+						this.el.tlt.addEventListener("click", () => this.setPhotoMode(1, true));
+						this.el.brt.addEventListener("click", () => this.setPhotoMode(2, true));
 						
 						// Ta ett foto (foto-läge)
-						this.el.sbtn.addEventListener("click",()=>this.takePhoto());
+						this.el.shutterReleaseBtn.addEventListener("click", () => this.takePhoto());
 						
 						// Starta timelapse
-						this.el.ti.addEventListener("click",()=>{
-							if(this.state.timelapse_running){
-								this.websocket.send("tlstop");
-								this.el.sl_it.removeAttribute("disabled");
-								this.el.sl_im.removeAttribute("disabled");
-								this.el.tsh.removeAttribute("disabled");
-								this.timelapse_data=null;
-								this.state.timelapse_running=false;
-								this.el.tlr.style.display="none";
-								this.el.ti.innerText="START";
+						this.el.startTimelapseBtn.addEventListener("click", () => {
+							if(this.timelapse.remaining > 0){
+								this.websocket.send(new Uint8Array([0b1001, 0, 0, 0])); // stoppa timelapse
 							} else {
-								let interval=parseInt(this.el.sl_it.value);
-								let pic_count=parseInt(this.el.sl_im.value);
-								this.websocket.send("tlstart_"+interval+"&"+pic_count);
-								this.timelapse_data={
-									total_pics:pic_count,
-									interval:interval,
-									remaining:pic_count
-								};
-								this.state.timelapse_running=true;
-								this.el.ti.innerText="STOP";
+								let interval = parseInt(this.el.sl_it.value);
+								let pic_count = parseInt(this.el.sl_im.value);
+								this.websocket.send(new Uint8Array([0b1001, interval, pic_count >>> 8, pic_count]));
+								this.el.startTimelapseBtn.innerText="STOP";
 								this.el.sl_it.setAttribute("disabled","");
 								this.el.sl_im.setAttribute("disabled","");
 								this.el.tsh.setAttribute("disabled","");
@@ -126,32 +145,35 @@
 						this.el.sl_im.addEventListener("input",()=>this.el.sl_imv.innerText=this.el.sl_im.value+" st");
 						
 						// Vanlig eller "timed" (från servern) shutter
-						this.el.tsh.addEventListener("change",()=>this.setTimedShutter(this.el.tsh.checked,true));
+						this.el.tsh.addEventListener("change", () => {
+							this.setTimedShutter(this.el.tsh.checked ? 5 : 0, true);
+						});
 						
 						// Visa inställningar för auto-exp (server)
-						this.el.saeb.addEventListener("click",()=>{
+						this.el.saeb.addEventListener("click", () => {
 							if(this.sae_visible){
-								this.el.saed.style.display="none";
-								this.sae_visible=false;
+								this.el.saed.style.display = "none";
+								this.sae_visible = false;
 							} else {
-								this.el.saed.style.display="block";
-								this.sae_visible=true;
-								this.el.sae_ix_sel.value=this.state.auto_exp.iso_limit[1].toString(10);
-								this.el.sae_in_sel.value=this.state.auto_exp.iso_limit[0].toString(10);
-								this.el.sae_ax_sel.value=this.state.auto_exp.aperture_limit[1].toString(10);
-								this.el.sae_an_sel.value=this.state.auto_exp.aperture_limit[0].toString(10);
-								this.el.sae_sx_sel.value=this.state.auto_exp.shtr_limit[1].toString(10);
-								this.el.sae_sn_sel.value=this.state.auto_exp.shtr_limit[0].toString(10);
+								this.el.saed.style.display = "block";
+								this.sae_visible = true;
+								this.el.sae_ix_sel.value = this.oc_auto_exp.iso_limit[1].toString(10);
+								this.el.sae_in_sel.value = this.oc_auto_exp.iso_limit[0].toString(10);
+								this.el.sae_ax_sel.value = this.oc_auto_exp.aperture_limit[1].toString(10);
+								this.el.sae_an_sel.value = this.oc_auto_exp.aperture_limit[0].toString(10);
+								this.el.sae_sx_sel.value = this.oc_auto_exp.shtr_limit[1].toString(10);
+								this.el.sae_sn_sel.value = this.oc_auto_exp.shtr_limit[0].toString(10);
+								this.el.sae_o_sel.value = this.oc_auto_exp.order_id.toString(2);
 							}
 						});
 						
 						// Slå på/av auto-exp (server)
 						this.el.aec.addEventListener("change",()=>{
-							this.setSAE(this.el.aec.checked,true);
+							this.setSAE(this.el.aec.checked, true);
 						});
 						
 						// Skapa alternativ för min/max-ISO för auto-exp (server)
-						this.constants.isos.forEach((iso,iso_i)=>{
+						LUMIX_CLIENT.ISOS.forEach((iso,iso_i)=>{
 							if(iso>0){
 								let iso_option=document.createElement("option");
 								let iso_opt2=document.createElement("option");
@@ -164,8 +186,8 @@
 							}
 						});
 						// Skapa alternativ för min/max-slutartid för auto-exp (server)
-						this.constants.shtr_speeds_str.forEach((shtr,shtr_i)=>{
-							if(shtr!==0){
+						LUMIX_CLIENT.SHTR_SPEEDS_STR.forEach((shtr,shtr_i)=>{
+							if(shtr_i > 0){
 								let shtr_option=document.createElement("option");
 								let shtr_opt2=document.createElement("option");
 								this.el.sae_sn_sel.appendChild(shtr_option);
@@ -177,7 +199,7 @@
 							}
 						});
 						// Skapa alternativ för min/max-aperture för auto-exp (server)
-						this.constants.apertures.forEach((aper,aper_i)=>{
+						LUMIX_CLIENT.APERTURES.forEach((aper,aper_i)=>{
 							if(aper!==0){
 								let ap_option=document.createElement("option");
 								let aper_opt2=document.createElement("option");
@@ -191,50 +213,43 @@
 						});
 						
 						// Välj max/min-ISO för auto-exp (server)
-						this.el.sae_in_sel.addEventListener("change",()=>{
-							let val=this.el.sae_in_sel.value;
-							this.state.auto_exp.iso_limit[0]=parseInt(val);
-							this.websocket.send("saexp_ison&"+val);
+						this.el.sae_in_sel.addEventListener("change", () => {
+							this.oc_auto_exp.iso_limit[0] = parseInt(this.el.sae_in_sel.value);
+							this.sendOCAESettings();
 						});
-						this.el.sae_ix_sel.addEventListener("change",()=>{
-							let val=this.el.sae_ix_sel.value;
-							this.state.auto_exp.iso_limit[1]=parseInt(val);
-							this.websocket.send("saexp_isox&"+val);
+						this.el.sae_ix_sel.addEventListener("change", () => {
+							this.oc_auto_exp.iso_limit[1] = parseInt(this.el.sae_ix_sel.value);
+							this.sendOCAESettings();
 						});
 						// Välj max/min-aperture för auto-exp (server)
-						this.el.sae_an_sel.addEventListener("change",()=>{
-							let val=this.el.sae_an_sel.value;
-							this.state.auto_exp.aperture_limit[0]=parseInt(val);
-							this.websocket.send("saexp_apn&"+val);
+						this.el.sae_an_sel.addEventListener("change", () => {
+							this.oc_auto_exp.aperture_limit[0] = parseInt(this.el.sae_an_sel.value);
+							this.sendOCAESettings();
 						});
-						this.el.sae_ax_sel.addEventListener("change",()=>{
-							let val=this.el.sae_ax_sel.value;
-							this.state.auto_exp.aperture_limit[1]=parseInt(val);
-							this.websocket.send("saexp_apx&"+val);
+						this.el.sae_ax_sel.addEventListener("change", () => {
+							this.oc_auto_exp.aperture_limit[1] = parseInt(this.el.sae_ax_sel.value);
+							this.sendOCAESettings();
 						});
 						// Välj max/min-shutter för auto-exp (server)
-						this.el.sae_sn_sel.addEventListener("change",()=>{
-							let val=this.el.sae_sn_sel.value;
-							this.state.auto_exp.shtr_limit[0]=parseInt(val);
-							this.websocket.send("saexp_shn&"+val);
+						this.el.sae_sn_sel.addEventListener("change", () => {
+							this.oc_auto_exp.shtr_limit[0] = parseInt(this.el.sae_sn_sel.value);
+							this.sendOCAESettings();
 						});
-						this.el.sae_sx_sel.addEventListener("change",()=>{
-							let val=this.el.sae_sx_sel.value;
-							this.state.auto_exp.shtr_limit[1]=parseInt(val);
-							this.websocket.send("saexp_shx&"+val);
+						this.el.sae_sx_sel.addEventListener("change", () => {
+							this.oc_auto_exp.shtr_limit[1] = parseInt(this.el.sae_sx_sel.value);
+							this.sendOCAESettings();
 						});
 						// Välj ordning för auto-exp (server)
-						this.el.sae_o_sel.addEventListener("change",()=>{
-							let val=this.el.sae_o_sel.value;
-							this.state.auto_exp.order=val.split("0");
-							this.websocket.send("saexp_ord&"+val);
+						this.el.sae_o_sel.addEventListener("change", () => {
+							this.oc_auto_exp.order_id = parseInt(this.el.sae_o_sel.value, 2);
+							this.sendOCAESettings();
 						});
-						this.el.lpu.addEventListener("click",()=>{
-							this.websocket.send("glpic");
+						this.el.lpu.addEventListener("click", () => {
+							this.websocket.send(new Uint8Array([0b11]));
 						});
-						this.el.lpset.addEventListener("click",()=>{
+						this.el.lpset.addEventListener("click", () => {
 							let value=prompt("Ange bild-id (ex. '119-651')");
-							if(value && value.length>4){
+							if(value && value.length > 4){
 								this.websocket.send("lpicid_"+value);
 							}
 						});
@@ -242,224 +257,200 @@
 					socket.addEventListener('message',(event)=>this.receiveMessage(event));
 				}
 				setISO(id,sync){
-					return new Promise((resolve,reject)=>{
-						this.el.sl_iv.innerText=this.constants.isos[id];
-						this.el.sl_i.value=id;
-						if(sync){
-							this.state.iso=id;
-							this.websocket.send("iso_"+this.constants.isos[id]);
-							resolve();
-						} else {
-							resolve();
-						}
+					return new Promise((resolve,reject) => {
+						this.el.isoText.innerText = LUMIX_CLIENT.ISOS[id];
+						this.el.isoInput.value = id;
+						this.camera_settings.iso_id = id;
+
+						if(sync) this.websocket.send(new Uint8Array([0b100, id]));
+						resolve();
 					});
 				}
-				setShutter(id,sync){
-					return new Promise((resolve,reject)=>{
-						this.el.sl_s.value=id;
-						if(!this.state.timed_shutter){
-							this.el.sl_sv.innerText=this.constants.shtr_speeds_str[id]+" s";
-							if(sync){
-								this.state.shtr=id;
-								this.websocket.send("shutter_"+id);
-								resolve();
-							} else {
-								resolve();
-							}
-						} else {
-							this.el.sl_sv.innerText=id+" s";
-							if(sync){
-								this.state.timed_shutter_t=id;
-								this.websocket.send("tshset_"+id);
-								resolve();
-							} else {
-								resolve();
-							}
+
+				setShutter(id, sync){
+					return new Promise((resolve, reject) => {
+						if(id < 0){
+							id = parseInt(this.el.shutterSpeedInput.value);
+						}else{
+							this.el.shutterSpeedInput.value = id;
 						}
+
+						if(this.state.timed_shutter > 0){
+							this.setTimedShutter(id, sync);
+						}else{
+							this.el.sl_sv.innerText = LUMIX_CLIENT.SHTR_SPEEDS_STR[id] + " s";
+							this.camera_settings.shtr_id = id;
+							if(sync) this.websocket.send(new Uint8Array([0b110, id])); // SETSHTR
+						}
+						resolve();
 					});
 				}
-				setAperture(id,sync){
-					return new Promise((resolve,reject)=>{
-						this.el.sl_av.innerHTML="<i>f</i>/"+this.constants.apertures[id];
-						this.el.sl_a.value=id;
-						if(sync){
-							this.state.aperture=id;
-							this.websocket.send("aperture_"+id);
-							resolve();
-						} else {
-							resolve();
-						}
+
+				setAperture(id, sync){
+					return new Promise((resolve, reject) => {
+						this.el.apertureText.innerHTML = "<i>f</i>/" + LUMIX_CLIENT.APERTURES[id];
+						this.el.apertureInput.value = id;
+						this.camera_settings.aperture_id = id;
+
+						if(sync) this.websocket.send(new Uint8Array([0b101, id]));
+						resolve();
 					});
 				}
-				setWB(wb,sync){
-					return new Promise((resolve,reject)=>{
-						this.el.sl_wv.innerHTML=wb+" K";
-						this.el.sl_w.value=wb;
-						if(sync){
-							this.state.wb=wb;
-							this.websocket.send("wb_"+wb);
-							resolve();
-						} else {
-							resolve();
-						}
+
+				setWB(wb, sync){
+					return new Promise((resolve, reject) => {
+						this.el.wbText.innerHTML = wb + " K";
+						this.el.wbInput.value = wb;
+						this.camera_settings.wb = wb;
+						if(sync) this.websocket.send(new Uint8Array([0b111, wb >>> 8, wb]));
+						resolve();
 					});
 				}
-				setPhotoMode(id,sync){
-					if(id==0 && !this.state.timelapse_running){
-						this.el.spc.style.display="block";
-						this.el.tlc.style.display="none";
-						this.el.brc.style.display="none";
-						this.el.spt.classList.add("active");
-						this.el.tlt.classList.remove("active");
-						this.el.brt.classList.remove("active");
-						this.state.photo_mode=0;
-						if(sync){this.websocket.send("selectmode_0")}
-					} else if(id==1){
-						this.el.spc.style.display="none";
-						this.el.tlc.style.display="block";
-						this.el.brc.style.display="none";
-						this.el.spt.classList.remove("active");
-						this.el.tlt.classList.add("active");
-						this.el.brt.classList.remove("active");
-						this.state.photo_mode=1;
-						if(sync){this.websocket.send("selectmode_1")}
-					} else if(id==2 && !this.state.timelapse_running && !this.state.timed_shutter && !this.state.auto_exp.enabled){
-						this.el.spc.style.display="none";
-						this.el.tlc.style.display="none";
-						this.el.brc.style.display="block";
-						this.el.spt.classList.remove("active");
-						this.el.tlt.classList.remove("active");
-						this.el.brt.classList.add("active");
-						this.state.photo_mode=2;
-						if(sync){this.websocket.send("selectmode_2")}
+
+				setPhotoMode(id, sync){
+					let set_id = this.state.photo_mode;
+					if(id == 0 && this.timelapse.remaining == 0) set_id = 0;
+					if(id == 1) set_id = 1;
+					if(id == 2 && this.timelapse.remaining == 0 && this.state.timed_shutter == 0 && !this.oc_auto_exp.enabled){
+						set_id = 2;
 					}
+
+					this.el.spc.style.display = set_id == 0 ? "block" : "none";
+					this.el.tlc.style.display = set_id == 1 ? "block" : "none";
+					this.el.brc.style.display = set_id == 2 ? "block" : "none";
+					this.el.spt.classList[set_id == 0 ? "add" : "remove"]("active");
+					this.el.tlt.classList[set_id == 1 ? "add" : "remove"]("active");
+					this.el.brt.classList[set_id == 2 ? "add" : "remove"]("active");
+					this.state.photo_mode = set_id;
+
+					if(sync) this.websocket.send(new Uint8Array([0b1100, set_id]));
 				}
-				
+
 				takePhoto(){
-					return new Promise(async(resolve,reject)=>{
-						this.websocket.send("capture");
-						this.el.sbtn.style.background="#ea6e00";
+					return new Promise(async(resolve,reject) => {
+						this.websocket.send(new Uint8Array([0b1]));
+						this.el.shutterReleaseBtn.style.background = "#ea6e00";
 						if(this.state.timed_shutter){
-							setTimeout(()=>{
-								this.el.sbtn.style.background="#000000";
+							setTimeout(() => {
+								this.el.shutterReleaseBtn.style.background = "#000000";
 								resolve();
-							},this.state.timed_shutter_t*1000);
+							}, this.state.timed_shutter_t * 1000);
 						} else {
-							setTimeout(()=>{
-								this.el.sbtn.style.background="#000000";
+							setTimeout(() => {
+								this.el.shutterReleaseBtn.style.background = "#000000";
 								resolve();
-							},this.constants.shtr_speeds[this.state.shtr]*1000);
+							}, LUMIX_CLIENT.SHTR_SPEEDS[this.camera_settings.shtr_id] * 1000);
 						}
 					});
 				}
-				setSAE(enabled,sync){
+				setSAE(enabled, sync){
 					if(enabled){
 						if(this.state.photo_mode!==2){
 							this.el.saeb.classList.add("on");
-							this.state.auto_exp.enabled=true;
-							if(sync){this.websocket.send("aexp_on");}else{this.el.aec.checked=true;}
+							this.oc_auto_exp.enabled = true;
+							if(sync) this.sendOCAESettings();
 						}
 					} else {
 						this.el.saeb.classList.remove("on");
-						this.state.auto_exp.enabled=false;
-						if(sync){this.websocket.send("aexp_off");}else{this.el.aec.checked=false;}
+						this.oc_auto_exp.enabled = false;
+						if(sync) this.sendOCAESettings();
 					}
 				}
 				cancelCapture(){
-					this.websocket.send("cancelcapture");
+					this.websocket.send(new Uint8Array([0b1000]));
 				}
-				setTimedShutter(enabled,sync){
-					if(enabled){
-						this.state.timed_shutter=true;
-						this.el.sl_s.setAttribute("min","5");
-						this.el.sl_s.setAttribute("max","120");
-						this.el.tsh.checked=true;
-						this.setShutter(this.state.timed_shutter_t,sync);
-						if(sync){
-							this.websocket.send("tsh_on");
-						}
+				setTimedShutter(seconds, sync){
+					this.state.timed_shutter = seconds;
+					this.el.tsh.checked = seconds > 0;
+					this.el.sl_sv.innerText = seconds + " s";
+					if(sync) this.websocket.send(new Uint8Array([0b1011, seconds])); // TSHSET
+
+					if(seconds > 0){
+						this.el.shutterSpeedInput.setAttribute("min", "5");
+						this.el.shutterSpeedInput.setAttribute("max", "120");
+						this.el.shutterSpeedInput.value = seconds;
 					} else {
-						this.state.timed_shutter=false;
-						this.state.timed_shutter_t=null;
-						this.el.sl_s.setAttribute("min","1");
-						this.el.sl_s.setAttribute("max","52");
-						this.el.tsh.checked=false;
-						this.setShutter(this.state.shtr,false);
-						if(sync){this.websocket.send("tsh_off");}
+						this.el.shutterSpeedInput.setAttribute("min", "1");
+						this.el.shutterSpeedInput.setAttribute("max", "52");
+						this.setShutter(-1, sync);
 					}
+				}
+
+				sendOCAESettings(){
+					let mask = this.oc_auto_exp.enabled ? 0b11111111 : 0b00000000;
+					this.websocket.send(new Uint8Array([
+						0b1010,
+						this.oc_auto_exp.iso_limit[0] & mask,
+						this.oc_auto_exp.iso_limit[1] & mask,
+						this.oc_auto_exp.aperture_limit[0] & mask,
+						this.oc_auto_exp.aperture_limit[1] & mask,
+						this.oc_auto_exp.shtr_limit[0] & mask,
+						this.oc_auto_exp.shtr_limit[1] & mask,
+						this.oc_auto_exp.order_id & 0b111 & mask
+					]));
 				}
 				
 				// Mycket viktiga funktioner. Är grunden till alla kommandon och synk-funktioner.
 				receiveMessage(event){
-					let msg_parsed=event.data.split("_");
-					let msg=[msg_parsed[0],msg_parsed.slice(1).join("_")];
-					console.log(msg[0]);
-					// Meddelande från server
-					if(msg[0]=="connected"){
-						// Lyckad anslutning
-						console.log("Lyckad anslutning!");
-					} else if(msg[0]=="syncstate"){
-						this.state=JSON.parse(msg[1]);
-						this.setISO(this.state.iso,false);
-						this.setAperture(this.state.aperture,false);
-						if(!this.state.timed_shutter){
-							this.setShutter(this.state.shtr,false);
-						} else {
-							this.setTimedShutter(true,false);
+					event.data.slice(0, 8).bytes().then(msg => {
+						console.log("Meddelandetyp 0x" + msg[0].toString(16));
+						// Meddelande från server
+						switch(msg[0]){
+							case 0b10000000: // STATE
+								this.setISO(msg[1], false);
+								this.setAperture(msg[2], false);
+								this.setWB((msg[4] << 8) + msg[5], false);
+								this.setTimedShutter(msg[6], false);
+								if(msg[6] == 0){
+									this.setShutter(msg[3], false);
+								}
+								this.setPhotoMode(msg[7], false);
+								break;
+							case 0b10000001: // TLSTAT
+								let tlr = (msg[4] << 8) + msg[5]; // antal bilder kvar
+								let tl = tlr > 0; // timelapse pågår
+								this.timelapse.interval = msg[1];
+								this.timelapse.total = (msg[2] << 8) + msg[3];
+								this.timelapse.remaining = tlr;
+								this.el.sl_it.disabled = tl;
+								this.el.sl_im.disabled = tl;
+								this.el.tsh.disabled = tl;
+								this.el.tlr.style.display= tl ? "inline-block" : "none";
+								this.el.startTimelapseBtn.innerText = tl ? "STOP" : "START";
+								if(tl) this.updateTLTime();
+								break;
+							case 0b10000011: // NEWIMG
+								console.log(event.data.slice(1)); // bilddata (binärt, jpeg troligen)
+								// this.el.pci.src="data:"+msg[1];
+								break;
+							case 0b10000010: // OCAEST
+								let enabled = msg[1] + msg[2] + msg[3] + msg[4] + msg[5] + msg[6] + msg[7] > 0;
+								this.setSAE(enabled, false);
+								if(enabled){
+									this.oc_auto_exp.order_id = msg[7];
+									this.oc_auto_exp.iso_limit = [msg[1], msg[2]];
+									this.oc_auto_exp.shtr_limit = [msg[5], msg[6]];
+									this.oc_auto_exp.aperture_limit = [msg[3], msg[4]];
+								}
+								break;
+							default:
+								console.error("Unknown websocket message from server.", msg);
 						}
-						this.setWB(this.state.wb,false);
-						this.setPhotoMode(this.state.photo_mode,false);
-						if(this.state.timelapse_running){
-							this.el.ti.innerText="STOP";
-							this.el.tlr.style.display="inline-block";
-							this.el.sl_it.setAttribute("disabled","");
-							this.el.sl_im.setAttribute("disabled","");
-							this.el.tsh.setAttribute("disabled","");
-						}
-						this.setSAE(this.state.auto_exp.enabled,false);
-					} else if(msg[0]=="tlsync"){
-						let tlsync_data=msg[1].split("&");
-						if(tlsync_data[2]=="begin"){
-							this.updateTLStatus({
-								interval:tlsync_data[0],
-								total_pics:tlsync_data[1],
-								remaining:tlsync_data[1]
-							});
-							this.el.tlr.style.display="inline-block";
-						} else {
-							this.updateTLStatus({
-								interval:tlsync_data[0],
-								total_pics:tlsync_data[1],
-								remaining:tlsync_data[2]
-							});
-						}
-					} else if(msg[0]=="tldone"){
-						this.timelapse_data=null;
-						this.state.timelapse_running=false;
-						this.el.tlr.style.display="none";
-						this.el.ti.innerText="START";
-						this.el.sl_it.removeAttribute("disabled");
-						this.el.sl_im.removeAttribute("disabled");
-						this.el.tsh.removeAttribute("disabled");
-					} else if(msg[0]=="newimg"){
-						this.el.pci.src="data:"+msg[1];
-					}
+					});
 				}
-				updateTLStatus(data){
-					if(data){
-						this.timelapse_data=data;
-						this.state.timelapse_running=true;
-						let all_seconds=data.interval*data.remaining;
-						let hours=Math.floor(all_seconds/3600);
-						let minutes=Math.floor((all_seconds-hours*3600)/60);
-						let seconds=all_seconds-(hours*3600+minutes*60);
-						this.el.pr.innerText=data.remaining;
-						if(hours>0){
-							this.el.tr.innerText=("0"+hours.toString(10)).slice(-2)+"h "+("0"+minutes.toString(10)).slice(-2)+"m";
-						} else {
-							this.el.tr.innerText=("0"+minutes.toString(10)).slice(-2)+"m "+("0"+seconds.toString(10)).slice(-2)+"s";
-						}
-						
+				updateTLTime(){
+					let all_seconds = this.timelapse.interval * this.timelapse.remaining;
+					let hours = Math.floor(all_seconds / 3600);
+					let minutes = Math.floor((all_seconds - hours * 3600) / 60);
+					let seconds = all_seconds - (hours * 3600 + minutes * 60);
+					this.el.pr.innerText = this.timelapse.remaining;
+
+					let tva=x=>("0" + x.toString()).slice(-2);
+
+					if(hours > 0){
+						this.el.tr.innerText = tva(hours) + "h " + tva(minutes) + "m";
+					} else {
+						this.el.tr.innerText = tva(minutes) + "m " + tva(seconds) + "s";
 					}
 				}
 			}
@@ -768,14 +759,14 @@
 				</style>
 			</head>
 			<body onload="ready()">
-				<div id="cnc" class="mb"><input id="a" type="text" value="192.168.54.1" disabled></input><button id="cbt" disabled>Ansluten</button></div><b>Slutartid:&nbsp;</b><span id="sl_sv">Laddar...</span><input type="range" min="1" max="52" value="1" class="slider" id="sl_s" disabled><div id="e2l"><b>Bländartal:&nbsp;</b><span id="sl_av">Laddar...</span><input type="range" min="1" max="10" value="1" class="slider" id="sl_a" disabled></div><div id="e2r"><b>ISO:&nbsp;</b><span id="sl_iv">Laddar...</span><input type="range" min="1" max="11" value="1" class="slider" id="sl_i" disabled></div><b>Vitbalans:&nbsp;</b><span id="sl_wv">Laddar...</span><input type="range" min="2500" max="10000" step="100" value="4000" class="slider mb" id="sl_w" disabled><div class="mb"><div id="zct"><b>Zoom</b><br><button class="z" id="zm" disabled><span class="ch">−</span></button>&nbsp;<button class="z" id="zp" disabled><span class="ch">+</span></button></div>&nbsp;<div id="fct"><b>Fokus</b><br><button class="z" id="fp" disabled>&nbsp;</button>&nbsp;<button class="z" id="fm" disabled>&nbsp;</button></div>&nbsp;<div id="tct"><b>C/T</b><br><label class="sw"><input type="checkbox" id="tsh" disabled><span class="sl"></span></label></div>&nbsp;<div id="saec"><b>S-AE</b><br><button class="z" id="saeb" disabled>&nbsp;</button></div></div><ul><li id="spt" class="active">Foto</li><li id="tlt">Timelapse</li><li id="brt">Burst</li></ul><div id="spc"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyOC4zIDI4LjMiIGZpbGw9IiNlMGUwZTAiPjxwYXRoIGQ9Ik04LjUgMy42M3MtMy41NiAxLjMyLTUuNjYgNi4zbDExLjU4LTIuMi01LjkyLTQuMXptLTUuODQgN3MtMS41NiAzLjQ2LjQ4IDguNDVsNi42Mi05Ljc2LTcuMSAxLjN6bS45MyA4Ljk0czEuMzIgMy41NiA2LjMgNS42NmwtMi4yLTExLjYtNC4xIDUuOTN6bTcgNS44M3MzLjQ2IDEuNTcgOC40NS0uNDhsLTkuNzYtNi42IDEuMyA3LjF6bTkuMTMtLjc3czMuNTYtMS4zMiA1LjY2LTYuM2wtMTEuNiAyLjIgNS45MyA0LjF6bTUuMzUtMTUuNDVsLTYuNiA5Ljc2IDcuMDgtMS4zMnMxLjU3LTMuNDUtLjQ4LTguNDR6bS0uNDQtLjVzLTEuMzItMy41NS02LjMtNS42NWwyLjIgMTEuNiA0LjEtNS45M3ptLTctNS44MnMtMy40Ni0xLjU3LTguNDUuNDhsOS43NiA2LjYtMS4zMi03LjA4ek0xNC4xNSAwYTE0LjE1IDE0LjE1IDAgMSAwIDAgMjguMyAxNC4xNSAxNC4xNSAwIDAgMCAwLTI4LjN6bTAgMjcuMmMtNy4yIDAtMTMuMDYtNS44NS0xMy4wNi0xMy4wNUExMy4xIDEzLjEgMCAwIDEgMTQuMTUgMS4wOWExMy4xIDEzLjEgMCAwIDEgMTMuMDYgMTMuMDYgMTMuMSAxMy4xIDAgMCAxLTEzLjA2IDEzLjA2eiIvPjwvc3ZnPg==" id="sbtn"></div><div id="tlc" style="display:none"><button id="ti" disabled>START</button><div id="tlr"><span id="pr">0</span>&nbsp;st återstår (<span id="tr">00:00</span>).</div><br><b>Intervall:</b>&nbsp;<span id="sl_itv">20 s</span><input type="range" min="5" max="120" value="20" class="slider" id="sl_it" disabled><b>Bilder:</b>&nbsp;<span id="sl_imv">150 st</span><input type="range" min="10" max="1000" value="150" step="10" class="slider" id="sl_im" disabled></div><div id="brc" style="display:none"><div id="brcc"><button id="brb" disabled>START</button><div id="brs"><div><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAA5UExURUdwTAAAAAEBAdbW1gAAAAAAAAAAAAAAAAAAAAAAAP///+Hh4e3t7fb29jMzM7q6uqCgoIGBgWNjYxAk1U4AAAAKdFJOUwDf//9/PV7AliOQp6tKAAABJ0lEQVQ4y9WU3Y6EIAxGsaC0gOXn/R92izqZjRZn3Ls9F9Z84YSCoDHPQRiBAwPCCPh/xmXVR4hjQw0H08AqgBpe878aSQA1vOYfDTupRhRADSu4hwbO/dA5MotHkvQoYIWLIVmeCKvUhsSl9i/j9zI0mtsEeVnYFr+lRxkYTPJs3CzPmnGmZzIwe0JGzdCAYyCZrw1iaa3v79mI0UYNXqYcLWOfI5at1/gydCo67gWWmV9Z9rd/BnDINqUsC0oHm/E+R2cikIOaUnUsWue3sWpUZwjbaidet6Gwvg29tf0UyS1RDO0fkf2MszFTDMBhN8K90RYsjMghDQ0898QhlJpCwZFxhjj1uZLs7peGkb3NWS4icW1Lb2Ivt7Og93IFDblt5FGe8gPbNRsO1Wh3YQAAAABJRU5ErkJggg==" id="bs"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAAnUExURUdwTAAAAAAAAAAAAAAAAP39/QAAANXV1d7e3unp6XR0dLCwsCwsLLna3A4AAAAFdFJOUwCAlii/0C90fwAAALVJREFUOMvVlIsKwyAMRWOyRmv9/++dL4bU3HbCKOwgUm57SBUN0TqsCAaGbgj9P2NadQ8ZG2YIyjxi7Bk1wzn/wrAWryGjZtgGkUhLpT3cG5xSLSQppaKoz0xGDdsg7e9d9NE9apy5NUygkXfFhxN+3KsyuUIMH8NmMGLl6MaO0H5Qhi+qgTvDYBwV34zLi1iPb5lehbgtGG2vBgP+GjQuCv3WYNBLsUG4Py0a3K+usLLQE7wByiQVDx9KxQQAAAAASUVORK5CYII=" id="bh"></div><div><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAABLUExURUdwTAAAAP///wAAAAAAAA8PDwAAAAAAAAAAAAAAAPHx8dPT09bW1tvb2+Hh4efn5/j4+Dg4OJSUlL29vVVVVX5+fm9vb6ioqMfHx1Mrp2wAAAAKdFJOUwCv//93+B/Bl0UyAi0aAAABg0lEQVQ4y9WU63KEIAyFlYDcRAyC6/s/aRNhurUrO+2fzvRMJjJHPg3XYfi9DPRkOgSInuD/ES+jbqbpE1ZLalttOY+ymp3fwEoCvWU5WNyQkPFRqklxSzgSgCtymFRMhjiXq0nxjtipLJOCmji9JyIJIDJhMWapQjLVZP9m8LCQABYmBnWkMS9oq1ljsnaqXVsDAgkgnIQpQaVNNbOGQlT23IGIPDEDzCSAeZfW0tjnnVrNrIHznLg0ejc/NBOeBOATfcEM+uG9mppZA70/FHWU2fv0lTgfbLN7JQ6PNIAxXYlvuhAPT8tLs7I1Yu7pcxyJ65/as83VrdpcYdiPwPWGHCqx9NTWA5c90RKNaVFLJWJPUAPjnmMxaj4gnkT/ZoC6tdDtym0aXQJ3Es/teKNKFH04VXhHb/pySG7ERwTXYtKat1XB+iS6pdExRFFkFkkcGsSTeHNHnIQSTtAZ+AWhNyGyfSHuSzNMyMK3xAtxL8sEJer8Q4J+bSZKdDGd6S/0AfomIsidPcJZAAAAAElFTkSuQmCC" id="bm"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAA5UExURUdwTP///wAAANXV1QAAAAAAAAAAAAAAAAAAAAAAAPb29unp6dvb2+Hh4aSkpL29vSgoKEdHR39/f4tNzRoAAAAKdFJOUwD///8ec9q/lUmN4ca6AAABDUlEQVQ4y9WUjWqEMAyAe2m8tFabtO//sEutHnMaz4Mx2EewEPjSX+Pc5wSwCIYBDwv4f8Zh12sy2AaGgM5FGvSrQ08a08CoQKhV6xG3bywsS1LDNoiZ9G7yCKieh0sjKasRSyoDSqo9qXFh5KyGezI/h5rkZZxtHmZlM0Kd5cmZerKHcxhxZ0zKZqBMVaYy9GQPF0Ukfje8shhRS1HmyoA92UNzfil3MLQS4FB8O+FbRhskIrAXvGP85K1ximlMFttZUZ72xmyx3QfleW8kC1gfCuW0M+zO8DI4MZ0+4BOW50s8/oZhLq39hsSPo3HRI1YjNvC+4cuC4J2lhWas1OFeZ/7c0Ga0zYfuT/gCiKEV1q9GbZ4AAAAASUVORK5CYII=" id="bl"></div></div></div></div><div id="ltc"><b>Senaste fotot:&nbsp;</b><button id="lpu" disabled>Uppdatera</button>&nbsp;<button id="lpset" disabled>Ändra nr</button></div><div id="pc"><div id="pcn" style="display:none"></div><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMjUgMTI1Jz48c3R5bGU+LmF7ZmlsbDpub25lO3N0cm9rZTojYWFhO3N0cm9rZS13aWR0aDoyO3N0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS1saW5lam9pbjpyb3VuZDtzdHJva2UtbWl0ZXJsaW1pdDoxMH08L3N0eWxlPjxwYXRoIGQ9J000MS43IDMyLjJjMTYuOS0zLjUgMzQuOS03LjMgNTEuOC0xMC44LjggMy43IDEuNSA3LjEgMi4yIDEwLjhtLTc0LjYgNDVjLTIuOC0xMy41LTUuMy0yNS41LTguMS0zOSAyLjEtLjQgNi0xLjMgOC4xLTEuN200NS4xIDU4LjhjLTEzLjYgMi44LTI2IDUuNC0zOS42IDguMi0uNi0yLjktMS4xLTUuMy0xLjctOC4ybTc2LjYtMzUuOGMxLjcgOC4xIDMuOSAxOS4yIDUuNiAyNy4zLTIgLjQtMy43LjgtNS43IDEuMm0tODAuMyA3LjNoODAuNFYzMi4ybS01LjcgMEgyMS4xdjU3LjMnIGNsYXNzPSdhJy8+PHBhdGggZD0nTTM0LjQgNzkuNmM0LjQtMTEuOSA3LjgtMjAuOSAxMi4zLTMyLjggMy45IDQuOSA3LjUgOS4zIDExLjMgMTQuMk02MC42IDY0LjFjMS44IDIuMyAzLjcgNC42IDUuNiA2LjkgMy4yLTIuNCA2LjQtNC44IDkuNy03LjMgNC44IDcuMyA5LjcgMTQuNSAxNC41IDIxLjhIMzNNODcuNCA0My4zYzEuOCAxLjMgMy4xIDMuNSAzIDUuOSAwIDQtMy4zIDcuMi03LjMgNy4yLTMgMC01LjYtMS44LTYuNy00LjRNNzYgNDhjLjUtMy41IDMuNS02LjEgNy4yLTYuMS4zIDAgLjYgMCAuOS4xTTExNSAyMS41bC0xMDUgODInIGNsYXNzPSdhJy8+PC9zdmc+" id="pci"></div><div id="saed"><div id="saed_l">Auto-exponering (server)</div><div id="saet_c"><label class="sw"><input type="checkbox" id="aec" disabled><span class="sl"></span></label></div><div id="sae_i"><span class="sae_ti">ISO</span>&nbsp;Min.&nbsp;<select id="sae_in_sel"></select>&nbsp;Max.&nbsp;<select id="sae_ix_sel"></select></div><div id="sae_s"><span class="sae_ti">Slutartid</span>&nbsp;Min.&nbsp;<select id="sae_sn_sel"></select>&nbsp;Max.&nbsp;<select id="sae_sx_sel"></select></div><div id="sae_a"><span class="sae_ti">Bländartal</span>&nbsp;Min.&nbsp;<select id="sae_an_sel"></select>&nbsp;Max.&nbsp;<select id="sae_ax_sel"></select></div><div id="sae_o"><span class="sae_ti">Ordning</span><select id="sae_o_sel"><option value="shtr0aperture0iso" selected>Slutartid > Bländartal > ISO</option><option value="shtr0iso0aperture">Slutartid > ISO > Bländartal</option><option value="iso0shtr0aperture">ISO > Slutartid > Bländartal</option><option value="iso0aperture0shtr">ISO > Bländartal > Slutartid</option><option value="aperture0shtr0iso">Bländartal > Slutartid > ISO</option><option value="aperture0iso0shtr">Bländartal > ISO > Slutartid</option></select></div>
+				<div id="cnc" class="mb"><input id="a" type="text" value="192.168.54.1" disabled></input><button id="cbt" disabled>Ansluten</button></div><b>Slutartid:&nbsp;</b><span id="sl_sv">Laddar...</span><input type="range" min="1" max="52" value="1" class="slider" id="sl_s" disabled><div id="e2l"><b>Bländartal:&nbsp;</b><span id="sl_av">Laddar...</span><input type="range" min="0" max="9" value="1" class="slider" id="sl_a" disabled></div><div id="e2r"><b>ISO:&nbsp;</b><span id="sl_iv">Laddar...</span><input type="range" min="0" max="10" value="1" class="slider" id="sl_i" disabled></div><b>Vitbalans:&nbsp;</b><span id="sl_wv">Laddar...</span><input type="range" min="2500" max="10000" step="100" value="4000" class="slider mb" id="sl_w" disabled><div class="mb"><div id="zct"><b>Zoom</b><br><button class="z" id="zm" disabled><span class="ch">−</span></button>&nbsp;<button class="z" id="zp" disabled><span class="ch">+</span></button></div>&nbsp;<div id="fct"><b>Fokus</b><br><button class="z" id="fp" disabled>&nbsp;</button>&nbsp;<button class="z" id="fm" disabled>&nbsp;</button></div>&nbsp;<div id="tct"><b>C/T</b><br><label class="sw"><input type="checkbox" id="tsh" disabled><span class="sl"></span></label></div>&nbsp;<div id="saec"><b>S-AE</b><br><button class="z" id="saeb" disabled>&nbsp;</button></div></div><ul><li id="spt" class="active">Foto</li><li id="tlt">Timelapse</li><li id="brt">Burst</li></ul><div id="spc"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyOC4zIDI4LjMiIGZpbGw9IiNlMGUwZTAiPjxwYXRoIGQ9Ik04LjUgMy42M3MtMy41NiAxLjMyLTUuNjYgNi4zbDExLjU4LTIuMi01LjkyLTQuMXptLTUuODQgN3MtMS41NiAzLjQ2LjQ4IDguNDVsNi42Mi05Ljc2LTcuMSAxLjN6bS45MyA4Ljk0czEuMzIgMy41NiA2LjMgNS42NmwtMi4yLTExLjYtNC4xIDUuOTN6bTcgNS44M3MzLjQ2IDEuNTcgOC40NS0uNDhsLTkuNzYtNi42IDEuMyA3LjF6bTkuMTMtLjc3czMuNTYtMS4zMiA1LjY2LTYuM2wtMTEuNiAyLjIgNS45MyA0LjF6bTUuMzUtMTUuNDVsLTYuNiA5Ljc2IDcuMDgtMS4zMnMxLjU3LTMuNDUtLjQ4LTguNDR6bS0uNDQtLjVzLTEuMzItMy41NS02LjMtNS42NWwyLjIgMTEuNiA0LjEtNS45M3ptLTctNS44MnMtMy40Ni0xLjU3LTguNDUuNDhsOS43NiA2LjYtMS4zMi03LjA4ek0xNC4xNSAwYTE0LjE1IDE0LjE1IDAgMSAwIDAgMjguMyAxNC4xNSAxNC4xNSAwIDAgMCAwLTI4LjN6bTAgMjcuMmMtNy4yIDAtMTMuMDYtNS44NS0xMy4wNi0xMy4wNUExMy4xIDEzLjEgMCAwIDEgMTQuMTUgMS4wOWExMy4xIDEzLjEgMCAwIDEgMTMuMDYgMTMuMDYgMTMuMSAxMy4xIDAgMCAxLTEzLjA2IDEzLjA2eiIvPjwvc3ZnPg==" id="sbtn"></div><div id="tlc" style="display:none"><button id="ti" disabled>START</button><div id="tlr"><span id="pr">0</span>&nbsp;st återstår (<span id="tr">00:00</span>).</div><br><b>Intervall:</b>&nbsp;<span id="sl_itv">20 s</span><input type="range" min="5" max="120" value="20" class="slider" id="sl_it" disabled><b>Bilder:</b>&nbsp;<span id="sl_imv">150 st</span><input type="range" min="10" max="1000" value="150" step="10" class="slider" id="sl_im" disabled></div><div id="brc" style="display:none"><div id="brcc"><button id="brb" disabled>START</button><div id="brs"><div><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAA5UExURUdwTAAAAAEBAdbW1gAAAAAAAAAAAAAAAAAAAAAAAP///+Hh4e3t7fb29jMzM7q6uqCgoIGBgWNjYxAk1U4AAAAKdFJOUwDf//9/PV7AliOQp6tKAAABJ0lEQVQ4y9WU3Y6EIAxGsaC0gOXn/R92izqZjRZn3Ls9F9Z84YSCoDHPQRiBAwPCCPh/xmXVR4hjQw0H08AqgBpe878aSQA1vOYfDTupRhRADSu4hwbO/dA5MotHkvQoYIWLIVmeCKvUhsSl9i/j9zI0mtsEeVnYFr+lRxkYTPJs3CzPmnGmZzIwe0JGzdCAYyCZrw1iaa3v79mI0UYNXqYcLWOfI5at1/gydCo67gWWmV9Z9rd/BnDINqUsC0oHm/E+R2cikIOaUnUsWue3sWpUZwjbaidet6Gwvg29tf0UyS1RDO0fkf2MszFTDMBhN8K90RYsjMghDQ0898QhlJpCwZFxhjj1uZLs7peGkb3NWS4icW1Lb2Ivt7Og93IFDblt5FGe8gPbNRsO1Wh3YQAAAABJRU5ErkJggg==" id="bs"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAAnUExURUdwTAAAAAAAAAAAAAAAAP39/QAAANXV1d7e3unp6XR0dLCwsCwsLLna3A4AAAAFdFJOUwCAlii/0C90fwAAALVJREFUOMvVlIsKwyAMRWOyRmv9/++dL4bU3HbCKOwgUm57SBUN0TqsCAaGbgj9P2NadQ8ZG2YIyjxi7Bk1wzn/wrAWryGjZtgGkUhLpT3cG5xSLSQppaKoz0xGDdsg7e9d9NE9apy5NUygkXfFhxN+3KsyuUIMH8NmMGLl6MaO0H5Qhi+qgTvDYBwV34zLi1iPb5lehbgtGG2vBgP+GjQuCv3WYNBLsUG4Py0a3K+usLLQE7wByiQVDx9KxQQAAAAASUVORK5CYII=" id="bh"></div><div><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAABLUExURUdwTAAAAP///wAAAAAAAA8PDwAAAAAAAAAAAAAAAPHx8dPT09bW1tvb2+Hh4efn5/j4+Dg4OJSUlL29vVVVVX5+fm9vb6ioqMfHx1Mrp2wAAAAKdFJOUwCv//93+B/Bl0UyAi0aAAABg0lEQVQ4y9WU63KEIAyFlYDcRAyC6/s/aRNhurUrO+2fzvRMJjJHPg3XYfi9DPRkOgSInuD/ES+jbqbpE1ZLalttOY+ymp3fwEoCvWU5WNyQkPFRqklxSzgSgCtymFRMhjiXq0nxjtipLJOCmji9JyIJIDJhMWapQjLVZP9m8LCQABYmBnWkMS9oq1ljsnaqXVsDAgkgnIQpQaVNNbOGQlT23IGIPDEDzCSAeZfW0tjnnVrNrIHznLg0ejc/NBOeBOATfcEM+uG9mppZA70/FHWU2fv0lTgfbLN7JQ6PNIAxXYlvuhAPT8tLs7I1Yu7pcxyJ65/as83VrdpcYdiPwPWGHCqx9NTWA5c90RKNaVFLJWJPUAPjnmMxaj4gnkT/ZoC6tdDtym0aXQJ3Es/teKNKFH04VXhHb/pySG7ERwTXYtKat1XB+iS6pdExRFFkFkkcGsSTeHNHnIQSTtAZ+AWhNyGyfSHuSzNMyMK3xAtxL8sEJer8Q4J+bSZKdDGd6S/0AfomIsidPcJZAAAAAElFTkSuQmCC" id="bm"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADEAAAAhCAMAAABHlLO1AAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAA5UExURUdwTP///wAAANXV1QAAAAAAAAAAAAAAAAAAAAAAAPb29unp6dvb2+Hh4aSkpL29vSgoKEdHR39/f4tNzRoAAAAKdFJOUwD///8ec9q/lUmN4ca6AAABDUlEQVQ4y9WUjWqEMAyAe2m8tFabtO//sEutHnMaz4Mx2EewEPjSX+Pc5wSwCIYBDwv4f8Zh12sy2AaGgM5FGvSrQ08a08CoQKhV6xG3bywsS1LDNoiZ9G7yCKieh0sjKasRSyoDSqo9qXFh5KyGezI/h5rkZZxtHmZlM0Kd5cmZerKHcxhxZ0zKZqBMVaYy9GQPF0Ukfje8shhRS1HmyoA92UNzfil3MLQS4FB8O+FbRhskIrAXvGP85K1ximlMFttZUZ72xmyx3QfleW8kC1gfCuW0M+zO8DI4MZ0+4BOW50s8/oZhLq39hsSPo3HRI1YjNvC+4cuC4J2lhWas1OFeZ/7c0Ga0zYfuT/gCiKEV1q9GbZ4AAAAASUVORK5CYII=" id="bl"></div></div></div></div><div id="ltc"><b>Senaste fotot:&nbsp;</b><button id="lpu" disabled>Uppdatera</button>&nbsp;<button id="lpset" disabled>Ändra nr</button></div><div id="pc"><div id="pcn" style="display:none"></div><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMjUgMTI1Jz48c3R5bGU+LmF7ZmlsbDpub25lO3N0cm9rZTojYWFhO3N0cm9rZS13aWR0aDoyO3N0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS1saW5lam9pbjpyb3VuZDtzdHJva2UtbWl0ZXJsaW1pdDoxMH08L3N0eWxlPjxwYXRoIGQ9J000MS43IDMyLjJjMTYuOS0zLjUgMzQuOS03LjMgNTEuOC0xMC44LjggMy43IDEuNSA3LjEgMi4yIDEwLjhtLTc0LjYgNDVjLTIuOC0xMy41LTUuMy0yNS41LTguMS0zOSAyLjEtLjQgNi0xLjMgOC4xLTEuN200NS4xIDU4LjhjLTEzLjYgMi44LTI2IDUuNC0zOS42IDguMi0uNi0yLjktMS4xLTUuMy0xLjctOC4ybTc2LjYtMzUuOGMxLjcgOC4xIDMuOSAxOS4yIDUuNiAyNy4zLTIgLjQtMy43LjgtNS43IDEuMm0tODAuMyA3LjNoODAuNFYzMi4ybS01LjcgMEgyMS4xdjU3LjMnIGNsYXNzPSdhJy8+PHBhdGggZD0nTTM0LjQgNzkuNmM0LjQtMTEuOSA3LjgtMjAuOSAxMi4zLTMyLjggMy45IDQuOSA3LjUgOS4zIDExLjMgMTQuMk02MC42IDY0LjFjMS44IDIuMyAzLjcgNC42IDUuNiA2LjkgMy4yLTIuNCA2LjQtNC44IDkuNy03LjMgNC44IDcuMyA5LjcgMTQuNSAxNC41IDIxLjhIMzNNODcuNCA0My4zYzEuOCAxLjMgMy4xIDMuNSAzIDUuOSAwIDQtMy4zIDcuMi03LjMgNy4yLTMgMC01LjYtMS44LTYuNy00LjRNNzYgNDhjLjUtMy41IDMuNS02LjEgNy4yLTYuMS4zIDAgLjYgMCAuOS4xTTExNSAyMS41bC0xMDUgODInIGNsYXNzPSdhJy8+PC9zdmc+" id="pci"></div><div id="saed"><div id="saed_l">Auto-exponering (server)</div><div id="saet_c"><label class="sw"><input type="checkbox" id="aec" disabled><span class="sl"></span></label></div><div id="sae_i"><span class="sae_ti">ISO</span>&nbsp;Min.&nbsp;<select id="sae_in_sel"></select>&nbsp;Max.&nbsp;<select id="sae_ix_sel"></select></div><div id="sae_s"><span class="sae_ti">Slutartid</span>&nbsp;Min.&nbsp;<select id="sae_sn_sel"></select>&nbsp;Max.&nbsp;<select id="sae_sx_sel"></select></div><div id="sae_a"><span class="sae_ti">Bländartal</span>&nbsp;Min.&nbsp;<select id="sae_an_sel"></select>&nbsp;Max.&nbsp;<select id="sae_ax_sel"></select></div><div id="sae_o"><span class="sae_ti">Ordning</span><select id="sae_o_sel"><option value="001" selected>Slutartid > Bländartal > ISO</option><option value="000">Slutartid > ISO > Bländartal</option><option value="101">ISO > Slutartid > Bländartal</option><option value="100">ISO > Bländartal > Slutartid</option><option value="010">Bländartal > Slutartid > ISO</option><option value="011">Bländartal > ISO > Slutartid</option></select></div>
 
 		<script>
-		let camera,s=1;
+		let camera;
 		function act(){ // Aktivera alla inputs.
-			s=s?0:1;
-			document.querySelectorAll("button:not(#cbt),input:not(#a):not(#cbt)").forEach(e=>e.disabled=s);
+			document.querySelectorAll("button:not(#cbt),input:not(#a):not(#cbt)").forEach(e=>e.disabled=0);
 		}
+
 		ready=(()=>{
 			camera=new LUMIX_CLIENT();
 			act();
